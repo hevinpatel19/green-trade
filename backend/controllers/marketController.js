@@ -68,3 +68,27 @@ export const getMarketFeed = async (req, res) => {
     res.status(500).json({ message: "Error fetching market feed" });
   }
 };
+
+// @desc    Get Platform Global Stats
+// @route   GET /api/market/stats
+export const getPlatformStats = async (req, res) => {
+  try {
+    // 1. Calculate Total Energy Traded (Sum of all sold items)
+    const soldItems = await EnergyListing.find({ isSold: true });
+    const totalVolume = soldItems.reduce((acc, item) => acc + item.energyAmount, 0);
+    
+    // 2. Calculate Average Price (from active listings)
+    const activeItems = await EnergyListing.find({ isSold: false });
+    const avgPrice = activeItems.length > 0
+        ? activeItems.reduce((acc, item) => acc + item.pricePerKwh, 0) / activeItems.length
+        : 0;
+
+    res.json({
+        totalVolume: totalVolume.toFixed(1),
+        avgPrice: avgPrice.toFixed(2),
+        activeListings: activeItems.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching stats" });
+  }
+};

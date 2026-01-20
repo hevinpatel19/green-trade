@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "../components/CheckoutForm";
+import UserContext from "../context/UserContext"; // ✅ IMPORT CONTEXT
 
 // Initialize Stripe
 const stripePromise = loadStripe("pk_test_51STyR8IkuLiRZrCBt3MgxdMfWISebWu7LDSTUYarsLWYdkGZ4eluBnbUB7UP8BG8hYaVinhDDcJ7nGUhTsScaaZq00rw102IfK");
 
 const CheckoutPage = () => {
+  const { user } = useContext(UserContext); // ✅ USE CONTEXT USER
   const location = useLocation();
   const navigate = useNavigate();
-  const { item } = location.state || {}; // Get item passed from Market
+  const { item } = location.state || {}; 
   const [clientSecret, setClientSecret] = useState("");
 
   // 1. Initialize Payment on Load
@@ -44,14 +46,14 @@ const CheckoutPage = () => {
   }, [item, navigate]);
 
   // 2. Handle Successful Payment (Update Database)
- const handleSuccess = async () => {
+  const handleSuccess = async () => {
     console.log("📝 Payment successful. Syncing with Database...");
     
     try {
-      const user = JSON.parse(localStorage.getItem("userInfo"));
-      const buyerName = user ? user.email : "Card User";
+      // ✅ USE REAL EMAIL from Context (Fallback to Guest only if bug)
+      const buyerName = user?.email || "guest@greentrade.com";
 
-      // 1. Send Request
+      // 1. Send Request to your EXISTING route
       const res = await axios.post(`http://localhost:5000/api/energy/buy/${item._id}`, {
         buyerAddress: buyerName
       });
@@ -61,16 +63,14 @@ const CheckoutPage = () => {
         console.log("✅ Order Synced:", res.data);
         alert("✅ Order Placed Successfully!");
         navigate("/orders");
-      } else {
-        throw new Error("Unexpected server response");
-      }
+      } 
 
     } catch (error) {
-      // If this hits, it means the server actually replied with an error code
       console.error("❌ Sync Error:", error);
-      alert("Payment processed, but we couldn't update your order history. Please contact support.");
+      alert("Payment processed, but database sync failed.");
     }
   };
+  
   if (!item) return null;
 
   return (
@@ -89,6 +89,7 @@ const CheckoutPage = () => {
                 <span>Total:</span>
                 <span>₹{(item.pricePerKwh * item.energyAmount).toFixed(2)}</span>
               </div>
+              <p className="text-xs text-gray-500 mt-2 text-right">Buying as: {user?.email}</p>
             </div>
 
             {/* Payment Form */}

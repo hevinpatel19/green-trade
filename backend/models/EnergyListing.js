@@ -1,15 +1,43 @@
 import mongoose from "mongoose";
 
-const EnergyListingSchema = new mongoose.Schema({
-  sellerAddress: { type: String, required: true },
-  energyAmount: { type: Number, required: true },
-  pricePerKwh: { type: Number, required: true },
-  totalPrice: { type: Number, required: false },
-  isSold: { type: Boolean, default: false },
-  blockchainId: { type: Number },
-  createdAt: { type: Date, default: Date.now },
-});
+const energyListingSchema = mongoose.Schema(
+  {
+    sellerAddress: {
+      type: String,
+      required: true,
+    },
+    energyAmount: {
+      type: Number,
+      required: true,
+    },
+    pricePerKwh: {
+      type: Number,
+      required: true,
+    },
+    totalPrice: {
+      type: Number,
+      // We can make this optional since we calculate it on the fly often
+      required: false, 
+    },
+    energyType: {
+      type: String,
+      default: "Solar",
+    },
+    isSold: {
+      type: Boolean,
+      default: false,
+    },
+    // ✅ THIS IS THE MISSING FIELD!
+    buyerAddress: {
+      type: String,
+      default: null, 
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
-// Use "export default" for ES Modules
-const EnergyListing = mongoose.model("EnergyListing", EnergyListingSchema);
+const EnergyListing = mongoose.model("EnergyListing", energyListingSchema);
+
 export default EnergyListing;
