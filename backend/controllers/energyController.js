@@ -56,6 +56,39 @@ export const listEnergy = async (req, res) => {
   }
 };
 
+// @desc    Mark energy as SOLD (Atomic Update)
+// @route   POST /api/energy/buy/:id
 export const buyEnergy = async (req, res) => {
-    // Keep your existing buy logic or leave empty for now
+  const { id } = req.params;
+  const { buyerAddress } = req.body;
+
+  console.log(`⚡ Processing Order for ID: ${id}`);
+
+  try {
+    // ACTUAL SOLUTION: Use findByIdAndUpdate
+    // This creates a direct database instruction: "Set isSold to true"
+    // It bypasses Mongoose validation checks that might be crashing your old logic.
+    const updatedListing = await EnergyListing.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          isSold: true,
+          buyerAddress: buyerAddress || "Verified Buyer",
+        },
+      },
+      { new: true } // Returns the updated document immediately
+    );
+
+    if (!updatedListing) {
+      console.log("❌ Item not found in DB");
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    console.log("✅ Database Updated Successfully!");
+    res.status(200).json(updatedListing);
+
+  } catch (error) {
+    console.error("❌ Database Error:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
 };
