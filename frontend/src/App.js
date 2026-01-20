@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
-import Market from "./pages/Market";
+import MarketPage from "./pages/MarketPage";
 import Dashboard from "./pages/Dashboard";
 import CheckoutPage from "./pages/CheckoutPage";
 import LoginPage from "./pages/LoginPage";
@@ -18,7 +18,7 @@ function App() {
           {/* ✅ CORRECTED: Only one Home route pointing to HomePage */}
           <Route path="/" element={<HomePage />} />
           
-          <Route path="/market" element={<Market />} />
+          <Route path="/market" element={<MarketPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/login" element={<LoginPage />} />
