@@ -1,31 +1,46 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import React, { useContext } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+
+// 🔴 DELETE THIS LINE:
+// import AuthContext, { AuthProvider } from "./context/UserContext";
+
+// ✅ ADD THIS LINE (Import UserProvider, NOT AuthProvider):
+import UserContext, { UserProvider } from "./context/UserContext"; 
+
 import Navbar from "./components/Navbar";
+import HomePage from "./pages/HomePage";
 import MarketPage from "./pages/MarketPage";
 import Dashboard from "./pages/Dashboard";
 import CheckoutPage from "./pages/CheckoutPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import OrderPage from "./pages/OrderPage";
-import HomePage from "./pages/HomePage"; // <--- This is the correct import
+
+const PrivateRoute = ({ children }) => {
+  const { user, loading } = useContext(UserContext); 
+  if (loading) return <div className="p-10 text-center">Loading...</div>;
+  return user ? children : <Navigate to="/login" />;
+};
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <Routes>
-          {/* ✅ CORRECTED: Only one Home route pointing to HomePage */}
-          <Route path="/" element={<HomePage />} />
-          
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/orders" element={<OrderPage />} />
-        </Routes>
-      </div>
+      {/* ✅ USE UserProvider HERE */}
+      <UserProvider> 
+        <div className="min-h-screen bg-gray-50 font-sans">
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/market" element={<MarketPage />} />
+            
+            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
+            <Route path="/orders" element={<PrivateRoute><OrderPage /></PrivateRoute>} />
+          </Routes>
+        </div>
+      </UserProvider>
     </Router>
   );
 }
