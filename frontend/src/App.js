@@ -1,13 +1,13 @@
 import React, { useContext } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// 🔴 DELETE THIS LINE:
-// import AuthContext, { AuthProvider } from "./context/UserContext";
+// Context
+import UserContext, { UserProvider } from "./context/UserContext";
 
-// ✅ ADD THIS LINE (Import UserProvider, NOT AuthProvider):
-import UserContext, { UserProvider } from "./context/UserContext"; 
-
+// Components
 import Navbar from "./components/Navbar";
+
+// Pages
 import HomePage from "./pages/HomePage";
 import MarketPage from "./pages/MarketPage";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +15,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import OrderPage from "./pages/OrderPage";
+import ProfilePage from "./pages/ProfilePage"; // ✅ Imported here
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext); 
@@ -25,19 +26,24 @@ const PrivateRoute = ({ children }) => {
 function App() {
   return (
     <Router>
-      {/* ✅ USE UserProvider HERE */}
       <UserProvider> 
         <div className="min-h-screen bg-gray-50 font-sans">
           <Navbar />
           <Routes>
+            {/* Public Routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/market" element={<MarketPage />} />
             
+            {/* Private Routes */}
             <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
             <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
             <Route path="/orders" element={<PrivateRoute><OrderPage /></PrivateRoute>} />
+            
+            {/* ✅ ADDED THIS MISSING LINE */}
+            <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+            
           </Routes>
         </div>
       </UserProvider>

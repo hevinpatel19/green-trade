@@ -4,106 +4,151 @@ import axios from "axios";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "../components/CheckoutForm";
-import UserContext from "../context/UserContext"; // ✅ IMPORT CONTEXT
+import UserContext from "../context/UserContext"; 
 
 // Initialize Stripe
 const stripePromise = loadStripe("pk_test_51STyR8IkuLiRZrCBt3MgxdMfWISebWu7LDSTUYarsLWYdkGZ4eluBnbUB7UP8BG8hYaVinhDDcJ7nGUhTsScaaZq00rw102IfK");
 
 const CheckoutPage = () => {
-  const { user } = useContext(UserContext); // ✅ USE CONTEXT USER
+  const { user } = useContext(UserContext);
   const location = useLocation();
   const navigate = useNavigate();
   const { item } = location.state || {}; 
   const [clientSecret, setClientSecret] = useState("");
+  const [processing, setProcessing] = useState(false);
 
-  // 1. Initialize Payment on Load
+  // 1. Initialize Payment
   useEffect(() => {
     if (!item) {
-      alert("No item selected! Redirecting to market.");
       navigate("/market");
       return;
     }
 
     const createPaymentIntent = async () => {
         try {
-            console.log(`💰 Initiating Payment: ₹${item.pricePerKwh * item.energyAmount}`);
-            
             const res = await axios.post("http://localhost:5000/api/payment/process", {
                 amount: item.pricePerKwh * item.energyAmount,
                 currency: "inr"
             });
-
             setClientSecret(res.data.clientSecret);
-            console.log("✅ Client Secret Received");
-            
         } catch (err) {
-            console.error("❌ Payment Intent Error:", err);
-            alert("Could not initialize payment. Is the Backend Running?");
+            console.error("Payment Init Error:", err);
+            alert("Payment Gateway Error");
         }
     };
 
     createPaymentIntent();
   }, [item, navigate]);
 
-  // 2. Handle Successful Payment (Update Database)
+  // 2. Handle Success
   const handleSuccess = async () => {
-    console.log("📝 Payment successful. Syncing with Database...");
-    
+    setProcessing(true);
     try {
-      // ✅ USE REAL EMAIL from Context (Fallback to Guest only if bug)
       const buyerName = user?.email || "guest@greentrade.com";
 
-      // 1. Send Request to your EXISTING route
+      // Mark item as sold in DB
       const res = await axios.post(`http://localhost:5000/api/energy/buy/${item._id}`, {
         buyerAddress: buyerName
       });
 
-      // 2. Verify Response
       if (res.status === 200) {
-        console.log("✅ Order Synced:", res.data);
-        alert("✅ Order Placed Successfully!");
         navigate("/orders");
       } 
-
     } catch (error) {
-      console.error("❌ Sync Error:", error);
-      alert("Payment processed, but database sync failed.");
+      alert("Payment succeeded, but database sync failed. Save your receipt.");
     }
+    setProcessing(false);
   };
   
   if (!item) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-lg overflow-hidden md:max-w-2xl">
-        <div className="md:flex">
-          <div className="p-8 w-full">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Secure Checkout</h2>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* LEFT: ORDER RECEIPT DESIGN */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 relative">
+            <div className="bg-gray-900 text-white p-6">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                    ⚡ Order Summary
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">Transaction ID: {item._id.substring(0,8)}</p>
+            </div>
             
-            {/* Order Summary */}
-            <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
-              <h3 className="font-bold text-gray-700">Order Summary</h3>
-              <p className="text-sm text-gray-600 mt-1">Energy: {item.energyAmount} kWh</p>
-              <p className="text-sm text-gray-600">Rate: ₹{item.pricePerKwh}/unit</p>
-              <div className="mt-2 pt-2 border-t border-blue-200 flex justify-between font-bold text-lg text-blue-900">
-                <span>Total:</span>
-                <span>₹{(item.pricePerKwh * item.energyAmount).toFixed(2)}</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-2 text-right">Buying as: {user?.email}</p>
+            <div className="p-8 space-y-6">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+                    <div>
+                        <p className="font-bold text-gray-800 text-lg">Energy Bundle</p>
+                        <p className="text-sm text-gray-500">{item.energyType || "Solar"} Power</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="font-bold text-gray-800 text-xl">{item.energyAmount} <span className="text-sm text-gray-500">kWh</span></p>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <div className="flex justify-between text-gray-600">
+                        <span>Rate per Unit</span>
+                        <span>₹{item.pricePerKwh}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                        <span>Platform Fee</span>
+                        <span>₹0.00</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                        <span>Taxes</span>
+                        <span>₹0.00</span>
+                    </div>
+                </div>
+
+                <div className="pt-6 border-t-2 border-dashed border-gray-200">
+                    <div className="flex justify-between items-end">
+                        <span className="font-bold text-gray-800 text-lg">Total Due</span>
+                        <span className="font-extrabold text-3xl text-green-600">
+                            ₹{(item.pricePerKwh * item.energyAmount).toFixed(2)}
+                        </span>
+                    </div>
+                </div>
             </div>
 
-            {/* Payment Form */}
-            {clientSecret ? (
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm onSuccess={handleSuccess} />
-                </Elements>
-            ) : (
-                <div className="text-center py-10 text-gray-500 font-bold animate-pulse">
-                    Connecting to Payment Gateway...
-                </div>
-            )}
-          </div>
+            {/* Security Badge */}
+            <div className="bg-gray-50 p-4 text-center text-xs text-gray-400 flex justify-center items-center gap-2">
+                🔒 256-bit SSL Encrypted Transaction
+            </div>
         </div>
+
+        {/* RIGHT: PAYMENT FORM */}
+        <div className="flex flex-col justify-center">
+            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Secure Payment</h3>
+                <p className="text-gray-500 text-sm mb-6">
+                    Complete your purchase securely using Stripe.
+                </p>
+
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-sm text-blue-800">
+                        <span className="font-bold">Buying as:</span> {user?.email}
+                    </p>
+                </div>
+
+                {clientSecret ? (
+                    <Elements stripe={stripePromise} options={{ clientSecret }}>
+                        <CheckoutForm onSuccess={handleSuccess} />
+                    </Elements>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                        <p className="text-gray-500 font-medium">Securing connection...</p>
+                    </div>
+                )}
+                
+                <div className="mt-6 flex justify-center gap-4 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+                     {/* You can add Visa/Mastercard icons here later if you want */}
+                     <span className="text-xs text-gray-400">Powered by Stripe</span>
+                </div>
+            </div>
+        </div>
+
       </div>
     </div>
   );

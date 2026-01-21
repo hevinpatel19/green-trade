@@ -13,7 +13,7 @@ const generateToken = (id) => {
 // @desc    Register new user
 // @route   POST /api/auth/register
 export const registerUser = async (req, res) => {
-  console.log("📝 Register Request:", req.body); // Debug Log
+  console.log("📝 Register Request:", req.body); 
 
   const { name, email, password, role } = req.body;
 
@@ -22,18 +22,14 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: "Please fill all fields" });
     }
 
-    // 1. Check if user exists
     const userExists = await User.findOne({ email });
     if (userExists) {
-      console.log("❌ User already exists");
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // 2. Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 3. Create user
     const user = await User.create({
       name,
       email,
@@ -54,7 +50,7 @@ export const registerUser = async (req, res) => {
       res.status(400).json({ message: "Invalid user data" });
     }
   } catch (error) {
-    console.error("❌ Register Error:", error.message); // This will show in terminal
+    console.error("❌ Register Error:", error.message); 
     res.status(500).json({ message: error.message });
   }
 };
@@ -62,20 +58,17 @@ export const registerUser = async (req, res) => {
 // @desc    Login User
 // @route   POST /api/auth/login
 export const loginUser = async (req, res) => {
-  console.log("🔑 Login Request:", req.body); // Debug Log
+  console.log("🔑 Login Request:", req.body); 
   
   const { email, password } = req.body;
 
   try {
-    // 1. Find User
     const user = await User.findOne({ email });
 
     if (!user) {
-        console.log("❌ User not found");
         return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    // 2. Check Password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (user && isMatch) {
@@ -88,7 +81,6 @@ export const loginUser = async (req, res) => {
         token: generateToken(user.id),
       });
     } else {
-      console.log("❌ Password Mismatch");
       res.status(401).json({ message: "Invalid email or password" });
     }
   } catch (error) {
@@ -97,7 +89,41 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// @desc    Get user profile (Placeholder)
+// @desc    Get user profile data
+// @route   GET /api/auth/profile
 export const getMe = async (req, res) => {
+    // In a real app, you'd fetch by ID from the token middleware
+    // For now, we just return a success message or the user object if passed
     res.status(200).json({ message: "Profile route working" });
+};
+
+// @desc    Update User Profile (Name & Email ONLY)
+// @route   PUT /api/auth/profile
+export const updateProfile = async (req, res) => {
+  try {
+    // We expect the ID to be sent from the frontend
+    const user = await User.findById(req.body.id);
+
+    if (user) {
+      user.name = req.body.name || user.name;
+      user.email = req.body.email || user.email;
+      
+      // If you want to allow password updates later, add that logic here
+
+      const updatedUser = await user.save();
+
+      res.json({
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        token: req.body.token // Keep the existing token so they don't get logged out
+      });
+    } else {
+      res.status(404).json({ message: "User not found" });
+    }
+  } catch (error) {
+    console.error("❌ Update Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
 };
