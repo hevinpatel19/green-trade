@@ -16,6 +16,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import OrderPage from "./pages/OrderPage";
 import ProfilePage from "./pages/ProfilePage"; // ✅ Imported here
+import AuctionPage from "./pages/AuctionPage"; // ✅ IMPORT THIS
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext); 
@@ -43,7 +44,8 @@ function App() {
             
             {/* ✅ ADDED THIS MISSING LINE */}
             <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
-            
+            {/* ✅ ADD THIS ROUTE TO FIX THE ISSUE */}
+            <Route path="/auction" element={<PrivateRoute><AuctionPage /></PrivateRoute>} />
           </Routes>
         </div>
       </UserProvider>

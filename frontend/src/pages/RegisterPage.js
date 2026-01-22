@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
 import { useNavigate, Link } from "react-router-dom";
 
 const RegisterPage = () => {
@@ -15,12 +16,12 @@ const RegisterPage = () => {
     try {
       // Call the Register Endpoint
       const res = await axios.post("http://localhost:5000/api/auth/register", formData);
-      
-      alert("✅ Registration Successful! Please Login.");
+
+      toast.success("Registration Successful! Please Login.");
       navigate("/login"); // Redirect to login page
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || "Registration Failed");
+      toast.error(error.response?.data?.message || "Registration Failed");
     }
   };
 
@@ -28,24 +29,24 @@ const RegisterPage = () => {
     <div className="flex justify-center items-center h-screen bg-gray-100">
       <div className="bg-white p-8 rounded-xl shadow-lg w-96">
         <h2 className="text-2xl font-bold mb-6 text-center text-green-700">Create Account</h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input 
-            type="text" name="name" placeholder="Full Name" 
+          <input
+            type="text" name="name" placeholder="Full Name"
             onChange={handleChange} required
             className="w-full p-3 border rounded bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
-          <input 
-            type="email" name="email" placeholder="Email Address" 
+          <input
+            type="email" name="email" placeholder="Email Address"
             onChange={handleChange} required
             className="w-full p-3 border rounded bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
-          <input 
-            type="password" name="password" placeholder="Password" 
+          <input
+            type="password" name="password" placeholder="Password"
             onChange={handleChange} required
             className="w-full p-3 border rounded bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
-          
+
           <button className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
             Sign Up
           </button>
