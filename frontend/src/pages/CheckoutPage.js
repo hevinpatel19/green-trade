@@ -43,14 +43,33 @@ const CheckoutPage = () => {
 
         const createPaymentIntent = async () => {
             try {
+                // Calculate amount based on item type
+                const pricePerUnit = Number(item.pricePerKwh) || 0;
+                const quantity = Number(item.energyAmount) || 0;
+                const totalAmount = pricePerUnit * quantity;
+
+                console.log("💳 Checkout Debug:", {
+                    pricePerKwh: item.pricePerKwh,
+                    energyAmount: item.energyAmount,
+                    isAuction: item.isAuction,
+                    calculatedAmount: totalAmount
+                });
+
+                // Validate amount before sending
+                if (!totalAmount || totalAmount <= 0 || isNaN(totalAmount)) {
+                    console.error("❌ Invalid amount:", totalAmount);
+                    toast.error("Invalid order amount. Please try again.");
+                    return;
+                }
+
                 const res = await axios.post("http://localhost:5000/api/payment/process", {
-                    amount: item.pricePerKwh * item.energyAmount,
+                    amount: totalAmount,
                     currency: "inr"
                 });
                 setClientSecret(res.data.clientSecret);
             } catch (err) {
                 console.error("Payment Init Error:", err);
-                toast.error("Payment Gateway Error");
+                toast.error(err.response?.data?.message || "Payment Gateway Error");
             }
         };
 

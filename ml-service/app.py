@@ -122,6 +122,124 @@ def predict_energy():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+# ✅ NEW: Forecast-based prediction with sunrise/sunset clamp
+@app.route('/predict-energy-forecast', methods=['POST', 'OPTIONS'])
+def predict_energy_forecast():
+    if request.method == "OPTIONS":
+        return jsonify({'status': 'ok'}), 200
+
+    if not model:
+        return jsonify({'error': 'Model not loaded'}), 500
+
+    data = request.json
+    
+    # Validation: Check required fields
+    forecast_points = data.get('forecast')
+    sunrise = data.get('sunrise')
+    sunset = data.get('sunset')
+    
+    if not forecast_points or not isinstance(forecast_points, list):
+        return jsonify({'error': 'Missing or invalid forecast array'}), 400
+    
+    if len(forecast_points) < 1:
+        return jsonify({'error': 'Forecast array is empty'}), 400
+        
+    if sunrise is None or sunset is None:
+        return jsonify({'error': 'Missing sunrise or sunset timestamps'}), 400
+    
+    try:
+        # Convert timestamps to hours for comparison
+        sunrise_hour = datetime.fromtimestamp(sunrise).hour
+        sunset_hour = datetime.fromtimestamp(sunset).hour
+        
+        total_energy = 0
+        hourly_results = []
+        
+        for point in forecast_points:
+            try:
+                # Extract forecast values
+                temp = float(point.get('temp', 20))
+                humidity = float(point.get('humidity', 50))
+                clouds = float(point.get('clouds', 0))
+                forecast_time = point.get('dt')  # Unix timestamp
+                
+                if forecast_time is None:
+                    continue
+                    
+                forecast_hour = datetime.fromtimestamp(forecast_time).hour
+                
+                # ☀️ NIGHTTIME CLAMP: Solar = 0 outside sunrise-sunset
+                is_daylight = sunrise_hour <= forecast_hour < sunset_hour
+                
+                if not is_daylight:
+                    # Nighttime - no solar production
+                    pred_energy = 0
+                else:
+                    # Daytime - run ML prediction
+                    input_data = np.array([[temp, humidity, clouds, forecast_hour]])
+                    pred_energy = max(0, model.predict(input_data)[0])
+                    
+                    # Apply cloud penalty for afternoon
+                    if clouds > 50 and forecast_hour >= 15:
+                        pred_energy = pred_energy * 0.5
+                    if clouds > 80 and forecast_hour >= 16:
+                        pred_energy = pred_energy * 0.2
+                
+                # Each forecast point represents 3 hours
+                interval_energy = pred_energy * 3
+                total_energy += interval_energy
+                
+                hourly_results.append({
+                    'hour': forecast_hour,
+                    'energy': round(interval_energy, 2),
+                    'is_daylight': is_daylight,
+                    'temp': temp,
+                    'clouds': clouds
+                })
+                
+            except (ValueError, TypeError) as e:
+                continue  # Skip invalid points
+        
+        # Calculate market status based on total yield
+        capacity = 500
+        efficiency = (total_energy / capacity) * 100
+        
+        current_multiplier = 1.0
+        status = "Balanced Market"
+        
+        if efficiency < 20:
+            current_multiplier = 1.8 + np.random.uniform(0, 0.2)
+            status = "Critical Shortage ☁️"
+        elif efficiency < 50:
+            current_multiplier = 1.3 + np.random.uniform(0, 0.1)
+            status = "High Demand"
+        elif efficiency > 80:
+            current_multiplier = 0.8 + np.random.uniform(-0.05, 0.05)
+            status = "Surplus Supply ☀️"
+        
+        # Find best selling hour (daylight only)
+        daylight_hours = [h for h in hourly_results if h['is_daylight'] and h['energy'] > 0]
+        best_hour = max(daylight_hours, key=lambda x: x['energy'])['hour'] if daylight_hours else 12
+        
+        return jsonify({
+            'predicted_energy': round(total_energy, 2),
+            'price_multiplier': round(current_multiplier, 2),
+            'market_status': status,
+            'sunrise_hour': sunrise_hour,
+            'sunset_hour': sunset_hour,
+            'forecast_points_used': len(hourly_results),
+            'advisor': {
+                'best_hour': best_hour,
+                'max_multiplier': round(current_multiplier, 2),
+                'message': f"Recommendation: Sell at {best_hour}:00 (Rate: {round(current_multiplier, 2)}x)"
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Forecast Prediction Error: {e}")
+        return jsonify({'error': str(e)}), 400
+    
     
 @app.route('/market-forecast', methods=['POST'])
 def market_forecast():

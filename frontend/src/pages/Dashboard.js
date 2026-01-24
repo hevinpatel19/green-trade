@@ -18,6 +18,7 @@ const Dashboard = () => {
   const [auctionDuration, setAuctionDuration] = useState(24);
   const [status, setStatus] = useState("");
   const [cityInput, setCityInput] = useState("");
+  const [countryCode, setCountryCode] = useState("IN"); // Default to India
 
   // --- NEW INVENTORY STATES ---
   const [myListings, setMyListings] = useState([]);
@@ -45,27 +46,81 @@ const Dashboard = () => {
   };
 
   // --- AI LOGIC ---
-  const processWeatherAndPredict = async (weatherUrl) => {
+  const processWeatherAndPredict = async (lat, lon, searchedCity = null, geoSelectedCity = null) => {
+    // Clear stale data immediately when starting new search
+    setWeatherData(null);
+    setPrediction(null);
+    setAdvisorTip(null);
+
     try {
-      setStatus("🌤️ Analyzing Weather & Market...");
-      const weatherRes = await axios.get(weatherUrl);
-      const { main, clouds, name } = weatherRes.data;
+      setStatus("🌤️ Fetching 24-hour forecast...");
+
+      // DEBUG: Log the exact coordinates being used
+      console.log(`\n========== NEW WEATHER REQUEST ==========`);
+      console.log(`📍 Input: searchedCity="${searchedCity}", geoSelectedCity="${geoSelectedCity}"`);
+      console.log(`📍 Coordinates: lat=${lat}, lon=${lon}`);
+
+      // Build URLs with exact lat/lon
+      const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`;
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric&cnt=8`;
+
+      console.log(`🔗 Weather URL: ${weatherUrl}`);
+      console.log(`🔗 Forecast URL: ${forecastUrl}`);
+
+      // Fetch current weather (for sunrise/sunset) and forecast (for 24h data)
+      const [currentRes, forecastRes] = await Promise.all([
+        axios.get(weatherUrl),
+        axios.get(forecastUrl)
+      ]);
+
+      const { name, sys, main, clouds } = currentRes.data;
+      const sunrise = sys.sunrise;
+      const sunset = sys.sunset;
+
+      // DEBUG: Log the actual response data
+      console.log(`�️ Weather API Response:`);
+      console.log(`   City: "${name}", Country: "${sys.country}"`);
+      console.log(`   Temp: ${main.temp}°C (raw value from API)`);
+      console.log(`   Humidity: ${main.humidity}%`);
+      console.log(`   Clouds: ${clouds.all}%`);
+      console.log(`   Coord in response: lat=${currentRes.data.coord?.lat}, lon=${currentRes.data.coord?.lon}`);
+      console.log(`==========================================\n`);
+
+      // Validate: Check if response coords match request coords
+      const respLat = currentRes.data.coord?.lat;
+      const respLon = currentRes.data.coord?.lon;
+      if (Math.abs(respLat - lat) > 0.5 || Math.abs(respLon - lon) > 0.5) {
+        console.error(`❌ COORD MISMATCH! Requested (${lat}, ${lon}) but got (${respLat}, ${respLon})`);
+      }
+
+      // Extract 8 forecast points (3-hour intervals = 24 hours)
+      const forecastPoints = forecastRes.data.list.map(item => ({
+        dt: item.dt,
+        temp: item.main.temp,
+        humidity: item.main.humidity,
+        clouds: item.clouds.all
+      }));
+
+      // Display current conditions - use geo-selected city name if available
+      const displayCity = geoSelectedCity || name;
 
       setWeatherData({
-        location: name,
+        location: displayCity,
         temp: main.temp,
         humidity: main.humidity,
-        clouds: clouds.all
+        clouds: clouds.all,
+        sunrise: new Date(sunrise * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        sunset: new Date(sunset * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       });
 
-      setStatus("🤖 AI Running Simulation...");
+      setStatus("🤖 AI Analyzing 24-hour forecast...");
 
-      // Wrap in try-catch to fallback if Python AI is offline
+      // Call new forecast-based prediction endpoint
       try {
-        const aiRes = await axios.post("http://localhost:5001/predict-energy", {
-          temperature: main.temp,
-          humidity: main.humidity,
-          cloud_cover: clouds.all
+        const aiRes = await axios.post("http://localhost:5001/predict-energy-forecast", {
+          forecast: forecastPoints,
+          sunrise: sunrise,
+          sunset: sunset
         });
 
         setPrediction(aiRes.data.predicted_energy);
@@ -75,25 +130,100 @@ const Dashboard = () => {
         });
         setAdvisorTip(aiRes.data.advisor);
       } catch (aiError) {
-        console.warn("AI Service Unavailable, using defaults");
-        setPrediction(150); // Fallback dummy value
+        console.warn("AI Service Unavailable, using defaults:", aiError.response?.data?.error || aiError.message);
+        setPrediction(150);
         setMarketInfo({ multiplier: 1.0, status: "Standard Rate" });
       }
 
       setStatus("✅ Analysis Complete!");
 
     } catch (error) {
-      console.error(error);
+      console.error("❌ Weather fetch error:", error);
       toast.error("Failed to fetch weather data.");
     }
     setLoading(false);
   };
 
-  const handleManualSearch = () => {
-    if (!cityInput) return toast.error("Please enter a city name");
+  const handleManualSearch = async () => {
+    const trimmedCity = cityInput?.trim();
+    if (!trimmedCity) return toast.error("Please enter a city name");
+
     setLoading(true);
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${cityInput}&appid=${WEATHER_API_KEY}&units=metric`;
-    processWeatherAndPredict(url);
+    try {
+      // Parse input: support "City, Country" format (overrides dropdown)
+      const parts = trimmedCity.split(',').map(p => p.trim());
+      const searchCity = parts[0];
+      // Use inline country if provided, otherwise use dropdown selection
+      let searchCountry = parts[1]?.toUpperCase() || countryCode?.toUpperCase() || null;
+
+      // Handle country name aliases
+      if (searchCountry === "INDIA") searchCountry = "IN";
+      if (searchCountry === "USA" || searchCountry === "AMERICA") searchCountry = "US";
+      if (searchCountry === "FRANCE") searchCountry = "FR";
+
+      console.log(`🔍 Search: city="${searchCity}", country="${searchCountry}"`);
+
+      // Get multiple results to find best match
+      const encodedCity = encodeURIComponent(searchCity);
+      const geoRes = await axios.get(`https://api.openweathermap.org/geo/1.0/direct?q=${encodedCity}&limit=10&appid=${WEATHER_API_KEY}`);
+
+      if (geoRes.data.length === 0) {
+        toast.error("City not found!");
+        setLoading(false);
+        return;
+      }
+
+      console.log(`📊 All Geo Results:`, geoRes.data.map(r => `${r.name}, ${r.country}`));
+
+      // Find best match from results
+      let bestMatch = null;
+      const normalizedSearch = searchCity.toLowerCase();
+
+      // Priority 1: Exact city name + exact country match
+      for (const result of geoRes.data) {
+        const resultCity = result.name.toLowerCase();
+        const resultCountry = result.country?.toUpperCase();
+
+        if (resultCity === normalizedSearch && resultCountry === searchCountry) {
+          bestMatch = result;
+          break;
+        }
+      }
+
+      // Priority 2: Exact city name, prefer specified country or India as default
+      if (!bestMatch) {
+        for (const result of geoRes.data) {
+          const resultCity = result.name.toLowerCase();
+          const resultCountry = result.country?.toUpperCase();
+
+          if (resultCity === normalizedSearch) {
+            if (resultCountry === "IN") {
+              bestMatch = result;
+              break;
+            }
+            // Keep first city match as fallback
+            if (!bestMatch) bestMatch = result;
+          }
+        }
+      }
+
+      // Priority 3: First result as fallback
+      if (!bestMatch) {
+        bestMatch = geoRes.data[0];
+      }
+
+      const { lat, lon, name, country } = bestMatch;
+      const displayLocation = `${name}, ${country}`;
+
+      console.log(`✅ Selected: "${displayLocation}" at (${lat}, ${lon})`);
+
+      // Pass both searched city and full display location
+      processWeatherAndPredict(lat, lon, searchCity, displayLocation);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to search city.");
+      setLoading(false);
+    }
   };
 
   const handleAutoPredict = () => {
@@ -102,8 +232,7 @@ const Dashboard = () => {
     setStatus("📍 Detecting Location...");
     navigator.geolocation.getCurrentPosition((position) => {
       const { latitude, longitude } = position.coords;
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${WEATHER_API_KEY}&units=metric`;
-      processWeatherAndPredict(url);
+      processWeatherAndPredict(latitude, longitude);
     }, () => setLoading(false));
   };
 
@@ -196,9 +325,26 @@ const Dashboard = () => {
 
           {!weatherData ? (
             <div className="space-y-4">
-              <input type="text" placeholder="Enter City" value={cityInput} onChange={(e) => setCityInput(e.target.value)} className="w-full p-3 border rounded-lg" />
-              <button onClick={handleManualSearch} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">Search Market</button>
-              <button onClick={handleAutoPredict} className="w-full bg-blue-100 text-blue-700 py-3 rounded-lg font-bold">📍 Use Location</button>
+              <div className="flex gap-2">
+                <input type="text" placeholder="Enter City" value={cityInput} onChange={(e) => setCityInput(e.target.value)} className="flex-1 p-3 border rounded-lg" />
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="w-24 p-3 border rounded-lg bg-white text-gray-700 font-medium"
+                >
+                  <option value="IN">🇮🇳 IN</option>
+                  <option value="US">🇺🇸 US</option>
+                  <option value="GB">🇬🇧 GB</option>
+                  <option value="FR">🇫🇷 FR</option>
+                  <option value="DE">🇩🇪 DE</option>
+                  <option value="AU">🇦🇺 AU</option>
+                  <option value="">Any</option>
+                </select>
+              </div>
+              <button onClick={handleManualSearch} disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold disabled:opacity-50">
+                {loading ? "Searching..." : "Search Market"}
+              </button>
+              <button onClick={handleAutoPredict} disabled={loading} className="w-full bg-blue-100 text-blue-700 py-3 rounded-lg font-bold disabled:opacity-50">📍 Use Location</button>
               <p className="text-center text-blue-600 text-sm">{status}</p>
             </div>
           ) : (
