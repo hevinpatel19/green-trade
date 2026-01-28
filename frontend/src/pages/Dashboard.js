@@ -130,7 +130,7 @@ const Dashboard = () => {
       await axios.post("http://localhost:5000/api/market/list", {
         sellerAddress: user.email,
         energyAmount: parseFloat(sellAmount), // Use manual input
-        pricePerKwh: parseFloat((basePrice * (advisorTip?.max_multiplier || 1)).toFixed(2)),
+        pricePerKwh: parseFloat(basePrice),
         energyType: "Solar",
         source: "AI Prediction",
         isAuction: isAuction,

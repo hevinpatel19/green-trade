@@ -161,7 +161,6 @@ def predict_energy_forecast():
         sunset_hour = datetime.utcfromtimestamp(sunset + timezone_offset).hour
         
         total_generated = 0
-        hourly_results = []
         
         for point in forecast_points:
             temp = float(point.get('temp', 20))
@@ -180,79 +179,34 @@ def predict_energy_forecast():
                 input_data = pd.DataFrame([[temp, humidity, clouds, forecast_hour]], columns=FEATURE_NAMES)
                 pred_energy = max(0, model.predict(input_data)[0])
                 
+                # Cloud penalties for accurate prediction
                 if clouds > 50 and forecast_hour >= 15: pred_energy *= 0.5
                 if clouds > 80 and forecast_hour >= 16: pred_energy *= 0.2
             
+            # Each forecast point represents 3 hours
             interval_energy = pred_energy * 3
             total_generated += interval_energy
-            
-            hour_multiplier = 1.0
-            if 11 <= forecast_hour <= 14:
-                hour_multiplier = 0.90 
-            elif 16 <= forecast_hour <= 19:
-                hour_multiplier = 1.7 if clouds > 50 else 1.3 
-            
-            potential_revenue = interval_energy * hour_multiplier
-
-            hourly_results.append({
-                'hour': forecast_hour,
-                'energy': round(interval_energy, 2),
-                'multiplier': round(hour_multiplier, 2),
-                'revenue': potential_revenue, 
-                'is_daylight': is_daylight
-            })
                 
-        # ✅ NEW: Calculate Net Energy (Generated - Consumed)
+        # Calculate Net Energy (Generated - Consumed)
         net_energy = total_generated - user_consumption
         
-        # Grid Market Status
-        efficiency = (total_generated / 500) * 100
-        current_multiplier = 1.0
-        status = "Balanced Market"
-        
-        if efficiency < 20:
-            current_multiplier = 1.8 + np.random.uniform(0, 0.2)
-            status = "Critical Shortage ☁️"
-        elif efficiency < 50:
-            current_multiplier = 1.3 + np.random.uniform(0, 0.1)
-            status = "High Demand"
-        elif efficiency > 80:
-            current_multiplier = 0.8 + np.random.uniform(-0.05, 0.05)
-            status = "Surplus Supply ☀️"
-        
-        # ✅ NEW: Smart Strategy Logic based on Net Energy
-        daylight_hours = [h for h in hourly_results if h['is_daylight'] and h['energy'] > 0]
-        
+        # Generate simple advisor message based on surplus/deficit
         if net_energy <= 0:
-            # User doesn't have enough energy for themselves
-            best_hour = -1
-            best_multiplier = 0
-            advice_msg = f"DEFICIT: You will generate {round(total_generated, 1)} kWh but consume {user_consumption} kWh. You need to BUY {abs(round(net_energy, 1))} kWh from the grid. Do not sell today."
             recommend_sell = False
+            recommended_sell_kwh = 0
+            advice_msg = f"DEFICIT: You will generate {round(total_generated, 1)} kWh but consume {user_consumption} kWh. You need to BUY {abs(round(net_energy, 1))} kWh from the grid. Do not sell today."
         else:
-            # User has excess energy to sell. Find most profitable hour.
-            if daylight_hours:
-                best_hour_data = max(daylight_hours, key=lambda x: x['revenue'])
-                best_hour = best_hour_data['hour']
-                best_multiplier = best_hour_data['multiplier']
-            else:
-                best_hour = 12
-                best_multiplier = 1.0
-            
-            advice_msg = f"SURPLUS: You have {round(net_energy, 1)} kWh of excess energy. Sell it at {best_hour}:00 to get the maximum market rate ({best_multiplier}x)."
             recommend_sell = True
+            recommended_sell_kwh = round(net_energy, 2)
+            advice_msg = f"SURPLUS: You have {round(net_energy, 1)} kWh of excess energy available to sell."
         
         return jsonify({
             'total_generated': round(total_generated, 2),
             'user_consumption': user_consumption,
             'net_energy': round(net_energy, 2),
-            'price_multiplier': round(current_multiplier, 2),
-            'market_status': status,
             'advisor': {
                 'recommend_sell': recommend_sell,
-                'recommended_sell_kwh': round(net_energy, 2) if recommend_sell else 0,
-                'best_hour': best_hour,
-                'max_multiplier': best_multiplier if recommend_sell else 0,
+                'recommended_sell_kwh': recommended_sell_kwh,
                 'message': advice_msg
             }
         })
