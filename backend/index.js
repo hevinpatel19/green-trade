@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js";
 import energyRoutes from "./routes/energyRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import marketRoutes from "./routes/marketRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 // ...
 
 dotenv.config();
@@ -27,6 +28,7 @@ app.use("/api/energy", energyRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/market", marketRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Database Connection
 mongoose

@@ -37,7 +37,10 @@ export const createListing = async (req, res) => {
       isAuction: isAuctionBool,
       auctionEndsAt,
       highestBid: 0,
-      bids: []
+      bids: [],
+      // Initialize with proper status
+      status: "pending",
+      paymentStatus: "pending"
     });
 
     res.status(201).json(listing);
@@ -60,29 +63,29 @@ export const placeBid = async (req, res) => {
     if (!listing) return res.status(404).json({ message: "Listing not found" });
     if (!listing.isAuction) return res.status(400).json({ message: "This item is not for auction" });
     if (listing.isSold) return res.status(400).json({ message: "Auction has already ended" });
-    
+
     // Check if time expired
     if (new Date() > new Date(listing.auctionEndsAt)) {
-        return res.status(400).json({ message: "Bidding time has expired" });
+      return res.status(400).json({ message: "Bidding time has expired" });
     }
 
     // 2. Check Bid Amount (Must be > highest bid OR > starting price)
     const currentHighest = listing.highestBid > 0 ? listing.highestBid : listing.pricePerKwh;
-    
+
     if (bidAmount <= currentHighest) {
-        return res.status(400).json({ message: `Bid must be higher than ₹${currentHighest}` });
+      return res.status(400).json({ message: `Bid must be higher than ₹${currentHighest}` });
     }
 
     // 3. Save Bid
     listing.bids.push({ bidderEmail, amount: bidAmount });
     listing.highestBid = bidAmount; // Update the display price
-    
+
     await listing.save();
 
-    res.json({ 
-        success: true, 
-        message: "Bid placed successfully", 
-        newHighest: listing.highestBid 
+    res.json({
+      success: true,
+      message: "Bid placed successfully",
+      newHighest: listing.highestBid
     });
 
   } catch (error) {
@@ -90,11 +93,12 @@ export const placeBid = async (req, res) => {
   }
 };
 
-// @desc    Mark a listing as SOLD (Immediate Buy)
+// @desc    Mark a listing as SOLD (Immediate Buy) - DEPRECATED
 // @route   PUT /api/market/buy/:id
+// @note    Use /api/payment/verify instead for proper payment verification
 export const buyListing = async (req, res) => {
   try {
-    const { buyerAddress } = req.body;
+    const { buyerAddress, buyerName } = req.body;
     const listingId = req.params.id;
 
     const listing = await EnergyListing.findById(listingId);
@@ -102,9 +106,13 @@ export const buyListing = async (req, res) => {
     if (!listing) return res.status(404).json({ message: "Listing not found" });
     if (listing.isSold) return res.status(400).json({ message: "Item already sold" });
 
+    // Mark as sold but keep payment status as pending
+    // Actual status update happens via /api/payment/verify
     listing.isSold = true;
-    listing.buyerAddress = buyerAddress; 
-    
+    listing.buyerAddress = buyerAddress;
+    listing.buyerName = buyerName || null;
+    listing.status = "matched"; // Matched but not yet paid
+
     await listing.save();
     res.json(listing);
 
@@ -117,11 +125,11 @@ export const buyListing = async (req, res) => {
 // @route   GET /api/market/mylistings/:email
 export const getMyListings = async (req, res) => {
   try {
-    const listings = await EnergyListing.find({ 
+    const listings = await EnergyListing.find({
       sellerAddress: req.params.email,
-      isSold: false 
+      isSold: false
     }).sort({ createdAt: -1 });
-    
+
     res.json(listings);
   } catch (error) {
     res.status(500).json({ message: "Error fetching listings" });
@@ -144,14 +152,34 @@ export const deleteListing = async (req, res) => {
   }
 };
 
-// @desc    Get Market Feed (Unsold Items Only)
+// @desc    Get Market Feed (Fixed Price ONLY - No Auctions)
 // @route   GET /api/market/feed
 export const getMarketFeed = async (req, res) => {
   try {
-    const listings = await EnergyListing.find({ isSold: false }).sort({ createdAt: -1 });
+    // ✅ FIX: Filter out auctions from market feed
+    const listings = await EnergyListing.find({
+      isSold: false,
+      isAuction: false  // Only show fixed-price listings
+    }).sort({ createdAt: -1 });
+
     res.json(listings);
   } catch (error) {
     res.status(500).json({ message: "Error fetching market feed" });
+  }
+};
+
+// @desc    Get Auction Feed (Auctions ONLY)
+// @route   GET /api/market/auctions
+export const getAuctionFeed = async (req, res) => {
+  try {
+    const auctions = await EnergyListing.find({
+      isSold: false,
+      isAuction: true
+    }).sort({ auctionEndsAt: 1 }); // Sort by ending soonest
+
+    res.json(auctions);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching auctions" });
   }
 };
 
@@ -161,16 +189,16 @@ export const getPlatformStats = async (req, res) => {
   try {
     const soldItems = await EnergyListing.find({ isSold: true });
     const totalVolume = soldItems.reduce((acc, item) => acc + item.energyAmount, 0);
-    
+
     const activeItems = await EnergyListing.find({ isSold: false });
     const avgPrice = activeItems.length > 0
-        ? activeItems.reduce((acc, item) => acc + item.pricePerKwh, 0) / activeItems.length
-        : 0;
+      ? activeItems.reduce((acc, item) => acc + item.pricePerKwh, 0) / activeItems.length
+      : 0;
 
     res.json({
-        totalVolume: totalVolume.toFixed(1),
-        avgPrice: avgPrice.toFixed(2),
-        activeListings: activeItems.length
+      totalVolume: totalVolume.toFixed(1),
+      avgPrice: avgPrice.toFixed(2),
+      activeListings: activeItems.length
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching stats" });

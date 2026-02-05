@@ -178,11 +178,24 @@ const AuctionPage = () => {
                             {isCurrentUserWinner ? (
                                 <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
                                     <p className="text-green-700 font-bold mb-2">🎉 Congratulations! You won!</p>
+                                    <p className="text-sm text-green-600 mb-3">
+                                        Winning amount: ₹{listing.highestBid} for {listing.energyAmount} kWh
+                                    </p>
                                     <button
-                                        onClick={() => navigate("/checkout", { state: { item: { ...listing, pricePerKwh: listing.highestBid / listing.energyAmount, isAuction: true, winnerEmail: user.email } } })}
+                                        onClick={() => navigate("/checkout", {
+                                            state: {
+                                                item: {
+                                                    ...listing,
+                                                    // ✅ FIX: Pass highestBid as total amount, not as pricePerKwh
+                                                    winningTotalAmount: listing.highestBid,
+                                                    isAuction: true,
+                                                    winnerEmail: user.email
+                                                }
+                                            }
+                                        })}
                                         className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold w-full"
                                     >
-                                        Pay Winning Bid
+                                        Pay ₹{listing.highestBid} Now
                                     </button>
                                 </div>
                             ) : listing?.highestBid > 0 ? (

@@ -141,7 +141,9 @@ const MarketPage = () => {
         return `${hours}h remaining`;
     };
 
-    const filteredListings = filter === "All" ? listings : listings.filter(item => item.energyType === filter);
+    // ✅ FIX: Filter out auctions from market page (backend also filters, this is backup)
+    const nonAuctionListings = listings.filter(item => !item.isAuction);
+    const filteredListings = filter === "All" ? nonAuctionListings : nonAuctionListings.filter(item => item.energyType === filter);
 
     return (
         <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">

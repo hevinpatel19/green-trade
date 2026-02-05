@@ -10,20 +10,44 @@ const energyListingSchema = mongoose.Schema(
   {
     sellerAddress: { type: String, required: true },
     energyAmount: { type: Number, required: true },
-    
-    // For Fixed Price: This is the price. 
-    // For Auction: This is the MINIMUM STARTING BID.
-    pricePerKwh: { type: Number, required: true }, 
+
+    // For Fixed Price: This is the price per kWh
+    // For Auction: This is the MINIMUM STARTING BID per kWh
+    pricePerKwh: { type: Number, required: true },
 
     energyType: { type: String, default: "Solar" },
     isSold: { type: Boolean, default: false },
     buyerAddress: { type: String, default: null },
 
-    // ✅ NEW AUCTION FIELDS
+    // ✅ AUCTION FIELDS
     isAuction: { type: Boolean, default: false },
-    auctionEndsAt: { type: Date }, // When the bidding stops
-    bids: [bidSchema], // History of bids
-    highestBid: { type: Number, default: 0 } // Quick access to top price
+    auctionEndsAt: { type: Date },
+    bids: [bidSchema],
+    highestBid: { type: Number, default: 0 },
+
+    // ✅ TRADE STATUS (P2P Energy Platform)
+    status: {
+      type: String,
+      enum: ["pending", "matched", "completed", "failed", "cancelled"],
+      default: "pending"
+    },
+
+    // ✅ PAYMENT STATUS (Gateway-controlled)
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed", "refunded"],
+      default: "pending"
+    },
+
+    // ✅ PAYMENT TRACKING FIELDS
+    stripePaymentIntentId: { type: String, default: null },
+    transactionId: { type: String, default: null },
+    totalAmount: { type: Number, default: null },
+    completedAt: { type: Date, default: null },
+
+    // ✅ BUYER INFO
+    buyerName: { type: String, default: null },
+    deliveryAddress: { type: String, default: null }
   },
   {
     timestamps: true,

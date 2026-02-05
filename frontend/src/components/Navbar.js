@@ -15,7 +15,7 @@ const Navbar = () => {
     <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
-          
+
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link to="/" className="group flex items-center gap-2">
@@ -36,17 +36,23 @@ const Navbar = () => {
             <Link to="/market" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
               MARKET
             </Link>
-            
+
             {user && (
-                <>
-                    <Link to="/orders" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-                        ORDERS
-                    </Link>
-                    {/* ✅ DASHBOARD IS NOW VISIBLE FOR EVERYONE LOGGED IN */}
-                    <Link to="/dashboard" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-                        DASHBOARD
-                    </Link>
-                </>
+              <>
+                <Link to="/orders" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
+                  ORDERS
+                </Link>
+                {/* ✅ DASHBOARD IS NOW VISIBLE FOR EVERYONE LOGGED IN */}
+                <Link to="/dashboard" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
+                  DASHBOARD
+                </Link>
+                {/* ✅ ADMIN BUTTON - Only visible for admin users */}
+                {user.role === "admin" && (
+                  <Link to="/admin" className="text-sm font-bold text-purple-600 hover:text-purple-800 transition flex items-center gap-1">
+                    <span>🛡️</span> ADMIN
+                  </Link>
+                )}
+              </>
             )}
           </div>
 
@@ -54,7 +60,7 @@ const Navbar = () => {
           <div className="flex items-center gap-4">
             {user ? (
               <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
-                
+
                 <Link to="/profile" className="hidden md:block text-right group cursor-pointer">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider group-hover:text-green-500 transition">
                     ACCOUNT
@@ -64,11 +70,11 @@ const Navbar = () => {
                   </p>
                 </Link>
 
-                <Link 
-                    to="/profile"
-                    className="h-10 w-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition"
+                <Link
+                  to="/profile"
+                  className="h-10 w-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition"
                 >
-                    {user.name.charAt(0).toUpperCase()}
+                  {user.name.charAt(0).toUpperCase()}
                 </Link>
 
                 <button
