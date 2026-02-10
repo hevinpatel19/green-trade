@@ -11,6 +11,8 @@ const ProfilePage = () => {
     const [formData, setFormData] = useState({
         name: user?.name || "",
         email: user?.email || "",
+        phoneNumber: user?.phoneNumber || "",
+        address: user?.address || "",
     });
 
     const handleUpdateProfile = async (e) => {
@@ -21,13 +23,14 @@ const ProfilePage = () => {
                 id: user._id,
                 name: formData.name,
                 email: formData.email,
+                address: formData.address,
                 token: user.token
             });
             login(res.data);
             setIsEditing(false);
-            toast.success("Identity Updated");
+            toast.success("Profile Updated Successfully!");
         } catch (error) {
-            toast.error("Update Failed");
+            toast.error(error.response?.data?.message || "Update Failed");
         }
         setLoading(false);
     };
@@ -73,7 +76,7 @@ const ProfilePage = () => {
                             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Digital Identity</h2>
                         </div>
 
-                        <form onSubmit={handleUpdateProfile} className="space-y-6">
+                        <form onSubmit={handleUpdateProfile} className="space-y-5">
 
                             {/* Name Input */}
                             <div className="relative group">
@@ -84,8 +87,8 @@ const ProfilePage = () => {
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     className={`w-full bg-transparent border-b-2 py-2 px-1 text-lg font-bold text-gray-800 focus:outline-none transition-colors ${isEditing
-                                            ? 'border-green-500 placeholder-gray-300'
-                                            : 'border-gray-200 text-center'
+                                        ? 'border-green-500 placeholder-gray-300'
+                                        : 'border-gray-200 text-center'
                                         }`}
                                 />
                             </div>
@@ -99,8 +102,36 @@ const ProfilePage = () => {
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     className={`w-full bg-transparent border-b-2 py-2 px-1 text-lg font-bold text-gray-800 focus:outline-none transition-colors ${isEditing
-                                            ? 'border-green-500 placeholder-gray-300'
-                                            : 'border-gray-200 text-center'
+                                        ? 'border-green-500 placeholder-gray-300'
+                                        : 'border-gray-200 text-center'
+                                        }`}
+                                />
+                            </div>
+
+                            {/* Phone Number (Read-only) */}
+                            <div className="relative group">
+                                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-widest pl-1">Phone Number</label>
+                                <input
+                                    type="tel"
+                                    disabled={true}
+                                    value={formData.phoneNumber || "Not provided"}
+                                    className="w-full bg-gray-50 border-b-2 border-gray-200 py-2 px-1 text-lg font-bold text-gray-600 focus:outline-none text-center cursor-not-allowed"
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1 text-center">Phone number is set during registration</p>
+                            </div>
+
+                            {/* Address Input */}
+                            <div className="relative group">
+                                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-widest pl-1">Address</label>
+                                <input
+                                    type="text"
+                                    disabled={!isEditing}
+                                    value={isEditing ? formData.address : (formData.address || "Not provided")}
+                                    placeholder={isEditing ? "Enter your address" : ""}
+                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                    className={`w-full bg-transparent border-b-2 py-2 px-1 text-lg font-bold focus:outline-none transition-colors ${isEditing
+                                        ? 'border-green-500 placeholder-gray-300 text-gray-800'
+                                        : `border-gray-200 text-center ${formData.address ? 'text-gray-800' : 'text-gray-400 italic'}`
                                         }`}
                                 />
                             </div>
@@ -111,7 +142,15 @@ const ProfilePage = () => {
                                     <div className="flex gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => { setIsEditing(false); setFormData({ name: user.name, email: user.email }); }}
+                                            onClick={() => {
+                                                setIsEditing(false);
+                                                setFormData({
+                                                    name: user.name,
+                                                    email: user.email,
+                                                    phoneNumber: user.phoneNumber || "",
+                                                    address: user.address || ""
+                                                });
+                                            }}
                                             className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition"
                                         >
                                             Cancel

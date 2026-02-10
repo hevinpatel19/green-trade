@@ -1,4 +1,115 @@
 import EnergyListing from "../models/EnergyListing.js";
+import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
+const ML_SERVICE_URL = "http://localhost:5001";
+
+// @desc    Get dynamic feed with city-based pricing
+// @route   GET /api/market/dynamic-feed?city=<city>
+//
+// PRICING FORMULA (inlined):
+//   1. Geocode city → lat/lon
+//   2. Fetch weather → cloud_cover
+//   3. Call ML service /market-forecast → live_multiplier (demand/supply from weather + time)
+//   4. Count active DB listings → local supply factor
+//      - < 10 listings → prices rise (supply scarce)
+//      - > 10 listings → prices drop (supply abundant)
+//   5. finalMultiplier = mlMultiplier × supplyFactor  (clamped 0.5–3.5x)
+//   6. dynamicPrice = basePrice × finalMultiplier
+export const getDynamicFeed = async (req, res) => {
+  try {
+    const { city } = req.query;
+    if (!city || !city.trim()) {
+      return res.status(400).json({ message: "City is required." });
+    }
+
+    const trimmedCity = city.trim();
+
+    // ── 1. Geocode city ──
+    const geoRes = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(trimmedCity)}&limit=1&appid=${WEATHER_API_KEY}`
+    );
+
+    if (!geoRes.data || geoRes.data.length === 0) {
+      return res.status(404).json({ message: "City not found. Try another name." });
+    }
+
+    const { lat, lon, name: resolvedCity } = geoRes.data[0];
+
+    // ── 2. Fetch weather ──
+    const weatherRes = await axios.get(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`
+    );
+    const cloudCover = weatherRes.data.clouds?.all ?? 50;
+
+    // ── 3. Local supply factor from DB ──
+    const activeListingCount = await EnergyListing.countDocuments({
+      isSold: false,
+      isAuction: false,
+    });
+    // Neutral at 10 listings; scale gently. Fewer = prices rise, more = prices drop
+    const supplyFactor = Math.max(0.7, Math.min(1.5, 1 + (10 - activeListingCount) * 0.05));
+
+    // ── 4. ML service (demand/supply from weather + time-of-day) ──
+    let mlData = null;
+    try {
+      const mlRes = await axios.post(`${ML_SERVICE_URL}/market-forecast`, {
+        cloud_cover: cloudCover,
+      });
+      mlData = mlRes.data;
+    } catch {
+      console.log("⚠️ ML service offline, using fallback multiplier 1.0");
+    }
+
+    // ── 5. Blend multiplier ──
+    const mlMultiplier = mlData?.live_multiplier ?? 1.0;
+    const rawMultiplier = mlMultiplier * supplyFactor;
+    // Safety: prevent NaN, clamp to 0.5–3.5
+    const multiplier = isNaN(rawMultiplier)
+      ? 1.0
+      : Math.max(0.5, Math.min(3.5, parseFloat(rawMultiplier.toFixed(2))));
+
+    const demandScore = mlData?.demand_score ?? 50;
+    const supplyScore = mlData?.supply_score ?? 50;
+    const trend = mlData?.trend ?? "STABLE";
+    const advice = mlData?.advice ?? "Market data limited.";
+    const condition = mlData?.condition ?? "Default";
+
+    // ── 6. Fetch listings and apply dynamic pricing ──
+    const listings = await EnergyListing.find({
+      isSold: false,
+      isAuction: false,
+    }).sort({ createdAt: -1 });
+
+    const pricedListings = listings.map((item) => {
+      const doc = item.toObject();
+      doc.basePrice = doc.pricePerKwh;
+      const computed = doc.pricePerKwh * multiplier;
+      doc.dynamicPrice = isNaN(computed) ? doc.pricePerKwh : parseFloat(computed.toFixed(2));
+      return doc;
+    });
+
+    res.json({
+      listings: pricedListings,
+      market: {
+        city: resolvedCity,
+        multiplier,
+        demandScore,
+        supplyScore,
+        activeListings: activeListingCount,
+        trend,
+        advice,
+        condition,
+      },
+    });
+  } catch (err) {
+    console.error("Dynamic Feed Error:", err.message);
+    res.status(500).json({ message: "Failed to fetch dynamic feed." });
+  }
+};
 
 // @desc    Create a new energy listing (Fixed Price OR Auction)
 // @route   POST /api/market/list
@@ -125,9 +236,15 @@ export const buyListing = async (req, res) => {
 // @route   GET /api/market/mylistings/:email
 export const getMyListings = async (req, res) => {
   try {
+    const now = new Date();
     const listings = await EnergyListing.find({
       sellerAddress: req.params.email,
-      isSold: false
+      isSold: false,
+      // Exclude expired auctions
+      $or: [
+        { isAuction: false },
+        { isAuction: true, auctionEndsAt: { $gt: now } }
+      ]
     }).sort({ createdAt: -1 });
 
     res.json(listings);
@@ -168,13 +285,15 @@ export const getMarketFeed = async (req, res) => {
   }
 };
 
-// @desc    Get Auction Feed (Auctions ONLY)
+// @desc    Get Auction Feed (Auctions ONLY - excludes expired)
 // @route   GET /api/market/auctions
 export const getAuctionFeed = async (req, res) => {
   try {
+    const now = new Date();
     const auctions = await EnergyListing.find({
       isSold: false,
-      isAuction: true
+      isAuction: true,
+      auctionEndsAt: { $gt: now } // Only show active (non-expired) auctions
     }).sort({ auctionEndsAt: 1 }); // Sort by ending soonest
 
     res.json(auctions);
@@ -183,14 +302,25 @@ export const getAuctionFeed = async (req, res) => {
   }
 };
 
-// @desc    Get Platform Stats
+// @desc    Get Platform Stats (excludes expired auctions)
 // @route   GET /api/market/stats
 export const getPlatformStats = async (req, res) => {
   try {
+    const now = new Date();
+
+    // Total volume from sold items
     const soldItems = await EnergyListing.find({ isSold: true });
     const totalVolume = soldItems.reduce((acc, item) => acc + item.energyAmount, 0);
 
-    const activeItems = await EnergyListing.find({ isSold: false });
+    // Active items: not sold AND (not auction OR auction not expired)
+    const activeItems = await EnergyListing.find({
+      isSold: false,
+      $or: [
+        { isAuction: false },
+        { isAuction: true, auctionEndsAt: { $gt: now } }
+      ]
+    });
+
     const avgPrice = activeItems.length > 0
       ? activeItems.reduce((acc, item) => acc + item.pricePerKwh, 0) / activeItems.length
       : 0;

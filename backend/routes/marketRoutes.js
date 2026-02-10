@@ -7,10 +7,14 @@ import {
     getAuctionFeed,
     getPlatformStats,
     buyListing,
-    placeBid
+    placeBid,
+    getDynamicFeed
 } from "../controllers/marketController.js";
 
 const router = express.Router();
+
+// 0. Dynamic Feed (City-gated, with dynamic pricing)
+router.get("/dynamic-feed", getDynamicFeed);
 
 // 1. Get Market Feed (Fixed Price ONLY - Public)
 router.get("/feed", getMarketFeed);

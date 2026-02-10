@@ -32,6 +32,30 @@ export const registerUser = async (req, res) => {
   }
 };
 
+// @desc    Get seller contact info (public fields only)
+// @route   GET /api/users/seller/:email
+export const getSellerContact = async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    const seller = await User.findOne({ email });
+
+    if (!seller) {
+      return res.status(404).json({ message: "Seller not found" });
+    }
+
+    // Return only public contact fields
+    res.json({
+      name: seller.name,
+      email: seller.email,
+      phoneNumber: seller.phoneNumber || null,
+    });
+  } catch (error) {
+    console.error("Error fetching seller contact:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Login user
 // @route   POST /api/auth/login
 export const loginUser = async (req, res) => {

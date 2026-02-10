@@ -13,13 +13,31 @@ const generateToken = (id) => {
 // @desc    Register new user
 // @route   POST /api/auth/register
 export const registerUser = async (req, res) => {
-  console.log("📝 Register Request:", req.body); 
+  console.log("📝 Register Request:", req.body);
 
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phoneNumber } = req.body;
 
   try {
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Please fill all fields" });
+    }
+
+    // phoneNumber is REQUIRED for new users
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    // Validate phone number format
+    if (!/^[0-9]+$/.test(phoneNumber)) {
+      return res.status(400).json({ message: "Phone number must contain only digits" });
+    }
+    if (phoneNumber.length < 10 || phoneNumber.length > 15) {
+      return res.status(400).json({ message: "Phone number must be 10-15 digits" });
+    }
+    // Check if phone number already exists
+    const phoneExists = await User.findOne({ phoneNumber });
+    if (phoneExists) {
+      return res.status(400).json({ message: "Phone number already in use" });
     }
 
     const userExists = await User.findOne({ email });
@@ -34,6 +52,8 @@ export const registerUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      phoneNumber,
+      address: undefined, // Address not collected during signup
       role: role || "buyer",
     });
 
@@ -43,6 +63,8 @@ export const registerUser = async (req, res) => {
         _id: user.id,
         name: user.name,
         email: user.email,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
         role: user.role,
         token: generateToken(user.id),
       });
@@ -50,7 +72,7 @@ export const registerUser = async (req, res) => {
       res.status(400).json({ message: "Invalid user data" });
     }
   } catch (error) {
-    console.error("❌ Register Error:", error.message); 
+    console.error("❌ Register Error:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
@@ -58,15 +80,15 @@ export const registerUser = async (req, res) => {
 // @desc    Login User
 // @route   POST /api/auth/login
 export const loginUser = async (req, res) => {
-  console.log("🔑 Login Request:", req.body); 
-  
+  console.log("🔑 Login Request:", req.body);
+
   const { email, password } = req.body;
 
   try {
     const user = await User.findOne({ email });
 
     if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -77,6 +99,8 @@ export const loginUser = async (req, res) => {
         _id: user.id,
         name: user.name,
         email: user.email,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
         role: user.role,
         token: generateToken(user.id),
       });
@@ -92,9 +116,9 @@ export const loginUser = async (req, res) => {
 // @desc    Get user profile data
 // @route   GET /api/auth/profile
 export const getMe = async (req, res) => {
-    // In a real app, you'd fetch by ID from the token middleware
-    // For now, we just return a success message or the user object if passed
-    res.status(200).json({ message: "Profile route working" });
+  // In a real app, you'd fetch by ID from the token middleware
+  // For now, we just return a success message or the user object if passed
+  res.status(200).json({ message: "Profile route working" });
 };
 
 // @desc    Update User Profile (Name & Email ONLY)
@@ -107,8 +131,30 @@ export const updateProfile = async (req, res) => {
     if (user) {
       user.name = req.body.name || user.name;
       user.email = req.body.email || user.email;
-      
-      // If you want to allow password updates later, add that logic here
+
+      // Update phone number if provided
+      if (req.body.phoneNumber !== undefined) {
+        // Validate phone number
+        if (req.body.phoneNumber && !/^[0-9]+$/.test(req.body.phoneNumber)) {
+          return res.status(400).json({ message: "Phone number must contain only digits" });
+        }
+        if (req.body.phoneNumber && (req.body.phoneNumber.length < 10 || req.body.phoneNumber.length > 15)) {
+          return res.status(400).json({ message: "Phone number must be 10-15 digits" });
+        }
+        // Check if phone number already exists (excluding current user)
+        if (req.body.phoneNumber) {
+          const phoneExists = await User.findOne({ phoneNumber: req.body.phoneNumber, _id: { $ne: user._id } });
+          if (phoneExists) {
+            return res.status(400).json({ message: "Phone number already in use" });
+          }
+        }
+        user.phoneNumber = req.body.phoneNumber || undefined;
+      }
+
+      // Update address if provided
+      if (req.body.address !== undefined) {
+        user.address = req.body.address || undefined;
+      }
 
       const updatedUser = await user.save();
 
@@ -116,6 +162,8 @@ export const updateProfile = async (req, res) => {
         _id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
+        phoneNumber: updatedUser.phoneNumber,
+        address: updatedUser.address,
         role: updatedUser.role,
         token: req.body.token // Keep the existing token so they don't get logged out
       });

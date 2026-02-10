@@ -1,23 +1,15 @@
 import express from "express";
-import {
-    processPayment,
-    sendStripeApiKey,
-    verifyPayment,
-    getTradeStatus
-} from "../controllers/paymentController.js";
+import { createIntent, getConfig, confirmOrder } from "../controllers/paymentController.js";
 
 const router = express.Router();
 
-// GET /api/payment/stripeapikey - Get Stripe public key
-router.get("/stripeapikey", sendStripeApiKey);
+// GET  /api/payment/config        – Publishable key for frontend
+router.get("/config", getConfig);
 
-// POST /api/payment/process - Create PaymentIntent
-router.post("/process", processPayment);
+// POST /api/payment/create-intent – Create a PaymentIntent
+router.post("/create-intent", createIntent);
 
-// POST /api/payment/verify - Verify payment and update DB status
-router.post("/verify", verifyPayment);
-
-// GET /api/payment/status/:listingId - Get trade/payment status
-router.get("/status/:listingId", getTradeStatus);
+// POST /api/payment/confirm-order – Update DB after successful payment
+router.post("/confirm-order", confirmOrder);
 
 export default router;

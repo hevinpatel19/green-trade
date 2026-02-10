@@ -40,7 +40,7 @@ const energyListingSchema = mongoose.Schema(
     },
 
     // ✅ PAYMENT TRACKING FIELDS
-    stripePaymentIntentId: { type: String, default: null },
+    paymentIntentId: { type: String, default: null },
     transactionId: { type: String, default: null },
     totalAmount: { type: Number, default: null },
     completedAt: { type: Date, default: null },

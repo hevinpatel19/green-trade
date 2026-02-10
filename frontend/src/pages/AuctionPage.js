@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import UserContext from "../context/UserContext";
+import ContactSellerButton from "../components/ContactSellerButton";
 
 const AuctionPage = () => {
     const { user } = useContext(UserContext);
@@ -271,6 +272,9 @@ const AuctionPage = () => {
                 </div>
 
             </div>
+
+            {/* Contact Seller Floating Button */}
+            <ContactSellerButton sellerEmail={listing?.sellerAddress} />
         </div>
     );
 };

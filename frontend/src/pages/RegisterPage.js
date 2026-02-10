@@ -4,15 +4,39 @@ import toast from "react-hot-toast";
 import { useNavigate, Link } from "react-router-dom";
 
 const RegisterPage = () => {
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", phoneNumber: "" });
+  const [phoneError, setPhoneError] = useState("");
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Clear phone error when user types
+    if (e.target.name === "phoneNumber") {
+      setPhoneError("");
+    }
+  };
+
+  const validatePhone = (phone) => {
+    if (!phone) return "Phone number is required"; // Required for new users
+    if (!/^[0-9]+$/.test(phone)) {
+      return "Phone number must contain only digits";
+    }
+    if (phone.length < 10 || phone.length > 15) {
+      return "Phone number must be 10-15 digits";
+    }
+    return "";
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate phone number before submission
+    const phoneValidationError = validatePhone(formData.phoneNumber);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      return;
+    }
+
     try {
       // Call the Register Endpoint
       const res = await axios.post("http://localhost:5000/api/auth/register", formData);
@@ -41,6 +65,19 @@ const RegisterPage = () => {
             onChange={handleChange} required
             className="w-full p-3 border rounded bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
+          <div>
+            <input
+              type="tel" name="phoneNumber" placeholder="Phone Number (10-15 digits)"
+              value={formData.phoneNumber}
+              onChange={handleChange}
+              required
+              className={`w-full p-3 border rounded bg-gray-50 focus:outline-none focus:ring-2 ${phoneError ? "border-red-500 focus:ring-red-500" : "focus:ring-green-500"
+                }`}
+            />
+            {phoneError && (
+              <p className="text-red-500 text-sm mt-1">{phoneError}</p>
+            )}
+          </div>
           <input
             type="password" name="password" placeholder="Password"
             onChange={handleChange} required
