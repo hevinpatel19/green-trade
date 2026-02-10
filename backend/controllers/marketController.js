@@ -1,4 +1,5 @@
 import EnergyListing from "../models/EnergyListing.js";
+import User from "../models/User.js";
 import axios from "axios";
 import dotenv from "dotenv";
 
@@ -7,53 +8,87 @@ dotenv.config();
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 const ML_SERVICE_URL = "http://localhost:5001";
 
-// @desc    Get dynamic feed with city-based pricing
-// @route   GET /api/market/dynamic-feed?city=<city>
+// ── Selling radius (km) — configurable ONLY here in code ──
+const SELLING_RADIUS_KM = 50;
+
+// ── Haversine distance (km) between two {lat, lng} points ──
+const haversineDistance = (coord1, coord2) => {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(coord2.lat - coord1.lat);
+  const dLng = toRad(coord2.lng - coord1.lng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(coord1.lat)) * Math.cos(toRad(coord2.lat)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// ── Strip coordinates from listing object before sending to frontend ──
+const stripCoords = (doc) => {
+  const obj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+  delete obj.sellerCoordinates;
+  return obj;
+};
+
+// @desc    Get dynamic feed with buyer-profile-based geo filtering + dynamic pricing
+// @route   GET /api/market/dynamic-feed?buyerEmail=<email>
 //
-// PRICING FORMULA (inlined):
-//   1. Geocode city → lat/lon
-//   2. Fetch weather → cloud_cover
-//   3. Call ML service /market-forecast → live_multiplier (demand/supply from weather + time)
-//   4. Count active DB listings → local supply factor
-//      - < 10 listings → prices rise (supply scarce)
-//      - > 10 listings → prices drop (supply abundant)
-//   5. finalMultiplier = mlMultiplier × supplyFactor  (clamped 0.5–3.5x)
-//   6. dynamicPrice = basePrice × finalMultiplier
+// FLOW:
+//   1. Look up buyer by email → get buyer coordinates & city
+//   2. Filter listings within SELLING_RADIUS_KM of buyer
+//   3. Geocode buyer city → fetch weather → ML multiplier → dynamic pricing
 export const getDynamicFeed = async (req, res) => {
   try {
-    const { city } = req.query;
-    if (!city || !city.trim()) {
-      return res.status(400).json({ message: "City is required." });
+    const { buyerEmail } = req.query;
+    if (!buyerEmail || !buyerEmail.trim()) {
+      return res.status(400).json({ message: "Buyer email is required." });
     }
 
-    const trimmedCity = city.trim();
+    // ── 1. Look up buyer profile ──
+    const buyer = await User.findOne({ email: buyerEmail.trim() });
+    if (!buyer) {
+      return res.status(404).json({ message: "Buyer not found." });
+    }
 
-    // ── 1. Geocode city ──
+    // Check buyer has complete address & coordinates
+    const buyerAddr = buyer.address || {};
+    const buyerCoords = buyer.coordinates || {};
+    if (!buyerAddr.city || !buyerAddr.country || !buyerCoords.lat || !buyerCoords.lng) {
+      return res.status(403).json({
+        message: "Complete your profile address to view nearby solar energy listings."
+      });
+    }
+
+    // ── 2. Geocode buyer's city for weather data ──
+    const geoQuery = `${buyerAddr.city},${buyerAddr.state || ""},${buyerAddr.country}`;
     const geoRes = await axios.get(
-      `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(trimmedCity)}&limit=1&appid=${WEATHER_API_KEY}`
+      `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(geoQuery)}&limit=1&appid=${WEATHER_API_KEY}`
     );
 
-    if (!geoRes.data || geoRes.data.length === 0) {
-      return res.status(404).json({ message: "City not found. Try another name." });
+    let resolvedCity = buyerAddr.city;
+    let lat = buyerCoords.lat;
+    let lon = buyerCoords.lng;
+    if (geoRes.data && geoRes.data.length > 0) {
+      resolvedCity = geoRes.data[0].name;
+      lat = geoRes.data[0].lat;
+      lon = geoRes.data[0].lon;
     }
 
-    const { lat, lon, name: resolvedCity } = geoRes.data[0];
-
-    // ── 2. Fetch weather ──
+    // ── 3. Fetch weather ──
     const weatherRes = await axios.get(
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`
     );
     const cloudCover = weatherRes.data.clouds?.all ?? 50;
 
-    // ── 3. Local supply factor from DB ──
+    // ── 4. Local supply factor from DB ──
     const activeListingCount = await EnergyListing.countDocuments({
       isSold: false,
       isAuction: false,
     });
-    // Neutral at 10 listings; scale gently. Fewer = prices rise, more = prices drop
     const supplyFactor = Math.max(0.7, Math.min(1.5, 1 + (10 - activeListingCount) * 0.05));
 
-    // ── 4. ML service (demand/supply from weather + time-of-day) ──
+    // ── 5. ML service ──
     let mlData = null;
     try {
       const mlRes = await axios.post(`${ML_SERVICE_URL}/market-forecast`, {
@@ -64,10 +99,9 @@ export const getDynamicFeed = async (req, res) => {
       console.log("⚠️ ML service offline, using fallback multiplier 1.0");
     }
 
-    // ── 5. Blend multiplier ──
+    // ── 6. Blend multiplier ──
     const mlMultiplier = mlData?.live_multiplier ?? 1.0;
     const rawMultiplier = mlMultiplier * supplyFactor;
-    // Safety: prevent NaN, clamp to 0.5–3.5
     const multiplier = isNaN(rawMultiplier)
       ? 1.0
       : Math.max(0.5, Math.min(3.5, parseFloat(rawMultiplier.toFixed(2))));
@@ -78,14 +112,22 @@ export const getDynamicFeed = async (req, res) => {
     const advice = mlData?.advice ?? "Market data limited.";
     const condition = mlData?.condition ?? "Default";
 
-    // ── 6. Fetch listings and apply dynamic pricing ──
-    const listings = await EnergyListing.find({
+    // ── 7. Fetch listings, filter by radius, apply dynamic pricing ──
+    const allListings = await EnergyListing.find({
       isSold: false,
       isAuction: false,
     }).sort({ createdAt: -1 });
 
-    const pricedListings = listings.map((item) => {
-      const doc = item.toObject();
+    // Radius filter: only listings whose seller is within SELLING_RADIUS_KM of the buyer
+    const nearbyListings = allListings.filter((item) => {
+      const sc = item.sellerCoordinates;
+      if (!sc || sc.lat == null || sc.lng == null) return false;
+      const dist = haversineDistance(buyerCoords, { lat: sc.lat, lng: sc.lng });
+      return dist <= SELLING_RADIUS_KM;
+    });
+
+    const pricedListings = nearbyListings.map((item) => {
+      const doc = stripCoords(item);
       doc.basePrice = doc.pricePerKwh;
       const computed = doc.pricePerKwh * multiplier;
       doc.dynamicPrice = isNaN(computed) ? doc.pricePerKwh : parseFloat(computed.toFixed(2));
@@ -113,6 +155,7 @@ export const getDynamicFeed = async (req, res) => {
 
 // @desc    Create a new energy listing (Fixed Price OR Auction)
 // @route   POST /api/market/list
+// Automatically attaches seller's profile coordinates to the listing
 export const createListing = async (req, res) => {
   try {
     const {
@@ -129,6 +172,15 @@ export const createListing = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Look up the seller's profile to get their stored coordinates
+    const seller = await User.findOne({ email: sellerAddress });
+    let sellerCoordinates = { lat: null, lng: null };
+    if (seller && seller.coordinates && seller.coordinates.lat != null) {
+      sellerCoordinates = { lat: seller.coordinates.lat, lng: seller.coordinates.lng };
+    } else {
+      console.log(`⚠️ Seller ${sellerAddress} has no coordinates. Listing will have limited visibility.`);
+    }
+
     const isAuctionBool = isAuction === true || isAuction === "true";
 
     let auctionEndsAt = null;
@@ -141,6 +193,7 @@ export const createListing = async (req, res) => {
 
     const listing = await EnergyListing.create({
       sellerAddress,
+      sellerCoordinates, // Snapshot of seller's profile coordinates
       energyAmount: Number(energyAmount),
       pricePerKwh: Number(pricePerKwh),
       energyType: energyType || "Solar",
@@ -149,12 +202,12 @@ export const createListing = async (req, res) => {
       auctionEndsAt,
       highestBid: 0,
       bids: [],
-      // Initialize with proper status
       status: "pending",
       paymentStatus: "pending"
     });
 
-    res.status(201).json(listing);
+    // Strip coordinates from the response
+    res.status(201).json(stripCoords(listing));
   } catch (error) {
     console.error("CREATE LISTING ERROR:", error);
     res.status(500).json({ message: error.message });
@@ -270,16 +323,38 @@ export const deleteListing = async (req, res) => {
 };
 
 // @desc    Get Market Feed (Fixed Price ONLY - No Auctions)
-// @route   GET /api/market/feed
+// @route   GET /api/market/feed?buyerEmail=<email>
+// If buyerEmail is provided, applies radius filtering
 export const getMarketFeed = async (req, res) => {
   try {
-    // ✅ FIX: Filter out auctions from market feed
+    const { buyerEmail } = req.query;
+    let buyerCoords = null;
+
+    // If buyer email is provided, look up their coordinates for radius filtering
+    if (buyerEmail) {
+      const buyer = await User.findOne({ email: buyerEmail.trim() });
+      if (buyer && buyer.coordinates && buyer.coordinates.lat != null) {
+        buyerCoords = { lat: buyer.coordinates.lat, lng: buyer.coordinates.lng };
+      }
+    }
+
     const listings = await EnergyListing.find({
       isSold: false,
-      isAuction: false  // Only show fixed-price listings
+      isAuction: false
     }).sort({ createdAt: -1 });
 
-    res.json(listings);
+    // Apply radius filter if buyer coords are available
+    let filtered = listings;
+    if (buyerCoords) {
+      filtered = listings.filter((item) => {
+        const sc = item.sellerCoordinates;
+        if (!sc || sc.lat == null || sc.lng == null) return false;
+        return haversineDistance(buyerCoords, { lat: sc.lat, lng: sc.lng }) <= SELLING_RADIUS_KM;
+      });
+    }
+
+    // Strip seller coordinates from response
+    res.json(filtered.map(stripCoords));
   } catch (error) {
     res.status(500).json({ message: "Error fetching market feed" });
   }

@@ -9,6 +9,11 @@ const bidSchema = new mongoose.Schema({
 const energyListingSchema = mongoose.Schema(
   {
     sellerAddress: { type: String, required: true },
+    // Seller geo coordinates — snapshot from seller profile at listing time
+    sellerCoordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
     energyAmount: { type: Number, required: true },
 
     // For Fixed Price: This is the price per kWh

@@ -8,11 +8,7 @@ const MarketPage = () => {
     const { user } = useContext(UserContext);
     const navigate = useNavigate();
 
-    // ── CITY GATE STATE ──
-    const [selectedCity, setSelectedCity] = useState(null);
-    const [cityInput, setCityInput] = useState("");
-
-    // ── MARKET DATA (only populated AFTER city is selected) ──
+    // ── MARKET DATA ──
     const [listings, setListings] = useState([]);
     const [marketData, setMarketData] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -28,25 +24,32 @@ const MarketPage = () => {
         energyType: "Solar",
     });
 
-    // ── Fetch dynamic feed whenever city changes ──
+    // Derive buyer address from profile
+    const buyerAddr = user?.address || {};
+    const hasCompleteAddress = buyerAddr.city && buyerAddr.country;
+    const buyerLocationDisplay = hasCompleteAddress
+        ? `${buyerAddr.city}${buyerAddr.state ? ", " + buyerAddr.state : ""}, ${buyerAddr.country}`
+        : null;
+
+    // ── Auto-fetch dynamic feed from buyer's profile location ──
     useEffect(() => {
-        if (!selectedCity) return;
+        if (!user || !hasCompleteAddress) return;
         let cancelled = false;
 
         const fetchDynamicFeed = async () => {
             setLoading(true);
             try {
                 const { data } = await axios.get(
-                    `http://localhost:5000/api/market/dynamic-feed?city=${encodeURIComponent(selectedCity)}`
+                    `http://localhost:5000/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`
                 );
                 if (cancelled) return;
                 setListings(data.listings);
                 setMarketData(data.market);
             } catch (err) {
                 if (cancelled) return;
-                if (err.response?.status === 404) {
-                    toast.error("City not found. Try another name.");
-                    setSelectedCity(null);
+                if (err.response?.status === 403) {
+                    // Buyer address incomplete — handled by the gate below
+                    console.log("Buyer address incomplete");
                 } else {
                     toast.error("Failed to fetch market data.");
                 }
@@ -56,14 +59,7 @@ const MarketPage = () => {
 
         fetchDynamicFeed();
         return () => { cancelled = true; };
-    }, [selectedCity]);
-
-    // ── Handle city submission ──
-    const handleCitySubmit = (e) => {
-        e?.preventDefault();
-        if (!cityInput.trim()) return toast.error("Please enter a city name.");
-        setSelectedCity(cityInput.trim());
-    };
+    }, [user, hasCompleteAddress]);
 
     // ── Handle create listing ──
     const handleListEnergy = async (e) => {
@@ -80,12 +76,11 @@ const MarketPage = () => {
             });
             toast.success("Listed Successfully!");
             setShowForm(false);
-            // Re-trigger feed fetch
-            setSelectedCity((prev) => prev);
+            // Re-fetch dynamic feed
             setListings([]);
             setLoading(true);
             const { data } = await axios.get(
-                `http://localhost:5000/api/market/dynamic-feed?city=${encodeURIComponent(selectedCity)}`
+                `http://localhost:5000/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`
             );
             setListings(data.listings);
             setMarketData(data.market);
@@ -98,7 +93,6 @@ const MarketPage = () => {
     // ── Navigation ──
     const handleBuyClick = (item) => {
         if (!user) return toast.error("Please Login First");
-        // dynamicPrice is already in the item from backend
         const updatedItem = { ...item, pricePerKwh: item.dynamicPrice };
         navigate("/checkout", { state: { item: updatedItem } });
     };
@@ -112,58 +106,46 @@ const MarketPage = () => {
     const multiplierBg = (m) => (m > 1.2 ? "bg-red-50 border-red-200" : "bg-white border-green-200");
 
     // ════════════════════════════════════════════════════════════════
-    //  CITY GATE — show this if no city is selected
+    //  ADDRESS GATE — show this if buyer profile address is missing
     // ════════════════════════════════════════════════════════════════
-    if (!selectedCity) {
+    if (!user || !hasCompleteAddress) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
                 <div className="max-w-lg w-full">
                     {/* Decorative header */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-4">
-                            <span className="text-4xl">🌍</span>
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-100 mb-4">
+                            <span className="text-4xl">📍</span>
                         </div>
-                        <h1 className="text-3xl font-extrabold text-gray-900">Select Your City</h1>
+                        <h1 className="text-3xl font-extrabold text-gray-900">Profile Address Required</h1>
                         <p className="mt-2 text-gray-500 text-lg">
-                            Prices are dynamically calculated based on local demand &amp; supply.
+                            Complete your profile address to view nearby solar energy listings.
                         </p>
                     </div>
 
-                    {/* City input card */}
-                    <form
-                        onSubmit={handleCitySubmit}
-                        className="bg-white p-8 rounded-2xl shadow-2xl border border-gray-100"
-                    >
-                        <label className="block text-sm font-bold text-gray-700 mb-3">
-                            Enter your city to see live market prices
-                        </label>
-                        <div className="flex gap-3">
-                            <input
-                                type="text"
-                                value={cityInput}
-                                onChange={(e) => setCityInput(e.target.value)}
-                                placeholder="e.g. Mumbai, Delhi, Bangalore..."
-                                className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-lg"
-                                autoFocus
-                            />
-                            <button
-                                type="submit"
-                                className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold transition shadow-lg active:scale-95"
-                            >
-                                Go →
-                            </button>
-                        </div>
+                    {/* Info card */}
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl border border-gray-100 text-center">
+                        <p className="text-gray-600 leading-relaxed mb-6">
+                            Your marketplace shows listings within your area based on your profile address.
+                            Add your <strong>city</strong> and <strong>country</strong> to get started.
+                        </p>
+                        <a
+                            href="/profile"
+                            className="inline-block bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold transition shadow-lg active:scale-95"
+                        >
+                            Go to Profile →
+                        </a>
                         <p className="mt-4 text-xs text-gray-400 text-center">
                             ⚡ AI-powered pricing adjusts based on weather, demand, and supply in your area.
                         </p>
-                    </form>
+                    </div>
                 </div>
             </div>
         );
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  MAIN MARKET VIEW — only after city is selected
+    //  MAIN MARKET VIEW — auto-loaded from buyer profile location
     // ════════════════════════════════════════════════════════════════
     return (
         <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -175,7 +157,7 @@ const MarketPage = () => {
                         Live Energy Market <span className="text-green-600 animate-pulse">●</span>
                     </h1>
                     <p className="mt-2 text-lg text-gray-500">
-                        Showing prices for <strong className="text-gray-900">{marketData?.city || selectedCity}</strong>
+                        Showing listings near <strong className="text-gray-900">{marketData?.city || buyerLocationDisplay}</strong>
                     </p>
                 </div>
                 <button
@@ -240,22 +222,13 @@ const MarketPage = () => {
                         </span>
                     </div>
 
-                    {/* City switcher */}
-                    <div className="flex gap-2 mt-6">
-                        <input
-                            type="text"
-                            placeholder="Change City..."
-                            value={cityInput}
-                            onChange={(e) => setCityInput(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleCitySubmit()}
-                            className="flex-1 p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                        />
-                        <button
-                            onClick={handleCitySubmit}
-                            className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 transition"
-                        >
-                            Go
-                        </button>
+                    {/* Location info (auto-synced from profile) */}
+                    <div className="mt-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500 font-medium">📍 Your Area</span>
+                            <span className="text-sm font-bold text-gray-800">{buyerLocationDisplay}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Location from your profile • Radius: {50} km</p>
                     </div>
                 </div>
 
@@ -289,8 +262,8 @@ const MarketPage = () => {
                         key={type}
                         onClick={() => setFilter(type)}
                         className={`px-4 py-2 rounded-full font-bold text-sm transition ${filter === type
-                                ? "bg-green-600 text-white shadow-md"
-                                : "bg-white text-gray-600 border border-gray-200"
+                            ? "bg-green-600 text-white shadow-md"
+                            : "bg-white text-gray-600 border border-gray-200"
                             }`}
                     >
                         {type}
@@ -303,11 +276,11 @@ const MarketPage = () => {
                 {loading ? (
                     <div className="col-span-full flex flex-col items-center justify-center py-16 space-y-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600" />
-                        <p className="text-gray-500 font-medium">Computing dynamic prices for {selectedCity}...</p>
+                        <p className="text-gray-500 font-medium">Finding nearby listings...</p>
                     </div>
                 ) : filteredListings.length === 0 ? (
                     <p className="text-center col-span-full text-gray-400 py-16 text-lg">
-                        No listings available in <strong>{selectedCity}</strong> right now.
+                        No listings available near <strong>{buyerLocationDisplay}</strong> right now.
                     </p>
                 ) : (
                     filteredListings.map((item) => (
@@ -352,8 +325,8 @@ const MarketPage = () => {
                                     <button
                                         onClick={() => handleBuyClick(item)}
                                         className={`px-6 py-2 rounded-lg font-bold text-white shadow-lg transition transform active:scale-95 ${(marketData?.multiplier || 1) > 1.5
-                                                ? "bg-red-600 hover:bg-red-700"
-                                                : "bg-gray-900 hover:bg-gray-800"
+                                            ? "bg-red-600 hover:bg-red-700"
+                                            : "bg-gray-900 hover:bg-gray-800"
                                             }`}
                                     >
                                         Buy Now

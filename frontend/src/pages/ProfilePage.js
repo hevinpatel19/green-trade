@@ -8,11 +8,25 @@ const ProfilePage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    // Structured address — supports both new object format and legacy string
+    const parseAddress = (addr) => {
+        if (addr && typeof addr === "object") {
+            return {
+                streetAddress: addr.streetAddress || "",
+                city: addr.city || "",
+                state: addr.state || "",
+                country: addr.country || "",
+            };
+        }
+        // Legacy fallback: if address was stored as a plain string
+        return { streetAddress: addr || "", city: "", state: "", country: "" };
+    };
+
     const [formData, setFormData] = useState({
         name: user?.name || "",
         email: user?.email || "",
         phoneNumber: user?.phoneNumber || "",
-        address: user?.address || "",
+        address: parseAddress(user?.address),
     });
 
     const handleUpdateProfile = async (e) => {
@@ -23,7 +37,7 @@ const ProfilePage = () => {
                 id: user._id,
                 name: formData.name,
                 email: formData.email,
-                address: formData.address,
+                address: formData.address, // Send structured address object
                 token: user.token
             });
             login(res.data);
@@ -36,6 +50,9 @@ const ProfilePage = () => {
     };
 
     if (!user) return <div className="p-20 text-center text-gray-500">Please Login</div>;
+
+    // Helper to check if profile address is complete
+    const isAddressComplete = formData.address.city && formData.address.country;
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f3f4f6] relative overflow-hidden">
@@ -120,20 +137,68 @@ const ProfilePage = () => {
                                 <p className="text-[9px] text-gray-400 mt-1 text-center">Phone number is set during registration</p>
                             </div>
 
-                            {/* Address Input */}
-                            <div className="relative group">
+                            {/* ═══ STRUCTURED ADDRESS FIELDS ═══ */}
+                            <div className="space-y-3">
                                 <label className="text-[10px] uppercase font-bold text-gray-400 tracking-widest pl-1">Address</label>
+
+                                {/* Street Address */}
                                 <input
                                     type="text"
                                     disabled={!isEditing}
-                                    value={isEditing ? formData.address : (formData.address || "Not provided")}
-                                    placeholder={isEditing ? "Enter your address" : ""}
-                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                    className={`w-full bg-transparent border-b-2 py-2 px-1 text-lg font-bold focus:outline-none transition-colors ${isEditing
+                                    value={isEditing ? formData.address.streetAddress : (formData.address.streetAddress || "Not provided")}
+                                    placeholder={isEditing ? "Street Address" : ""}
+                                    onChange={(e) => setFormData({ ...formData, address: { ...formData.address, streetAddress: e.target.value } })}
+                                    className={`w-full bg-transparent border-b-2 py-2 px-1 text-base font-bold focus:outline-none transition-colors ${isEditing
                                         ? 'border-green-500 placeholder-gray-300 text-gray-800'
-                                        : `border-gray-200 text-center ${formData.address ? 'text-gray-800' : 'text-gray-400 italic'}`
+                                        : `border-gray-200 text-center ${formData.address.streetAddress ? 'text-gray-800' : 'text-gray-400 italic'}`
                                         }`}
                                 />
+
+                                {/* City + State (side by side) */}
+                                <div className="flex gap-3">
+                                    <input
+                                        type="text"
+                                        disabled={!isEditing}
+                                        value={isEditing ? formData.address.city : (formData.address.city || "—")}
+                                        placeholder={isEditing ? "City *" : ""}
+                                        onChange={(e) => setFormData({ ...formData, address: { ...formData.address, city: e.target.value } })}
+                                        className={`flex-1 bg-transparent border-b-2 py-2 px-1 text-base font-bold focus:outline-none transition-colors ${isEditing
+                                            ? 'border-green-500 placeholder-gray-300 text-gray-800'
+                                            : `border-gray-200 text-center ${formData.address.city ? 'text-gray-800' : 'text-gray-400 italic'}`
+                                            }`}
+                                    />
+                                    <input
+                                        type="text"
+                                        disabled={!isEditing}
+                                        value={isEditing ? formData.address.state : (formData.address.state || "—")}
+                                        placeholder={isEditing ? "State" : ""}
+                                        onChange={(e) => setFormData({ ...formData, address: { ...formData.address, state: e.target.value } })}
+                                        className={`flex-1 bg-transparent border-b-2 py-2 px-1 text-base font-bold focus:outline-none transition-colors ${isEditing
+                                            ? 'border-green-500 placeholder-gray-300 text-gray-800'
+                                            : `border-gray-200 text-center ${formData.address.state ? 'text-gray-800' : 'text-gray-400 italic'}`
+                                            }`}
+                                    />
+                                </div>
+
+                                {/* Country */}
+                                <input
+                                    type="text"
+                                    disabled={!isEditing}
+                                    value={isEditing ? formData.address.country : (formData.address.country || "—")}
+                                    placeholder={isEditing ? "Country *" : ""}
+                                    onChange={(e) => setFormData({ ...formData, address: { ...formData.address, country: e.target.value } })}
+                                    className={`w-full bg-transparent border-b-2 py-2 px-1 text-base font-bold focus:outline-none transition-colors ${isEditing
+                                        ? 'border-green-500 placeholder-gray-300 text-gray-800'
+                                        : `border-gray-200 text-center ${formData.address.country ? 'text-gray-800' : 'text-gray-400 italic'}`
+                                        }`}
+                                />
+
+                                {/* Address completeness hint */}
+                                {isEditing && !isAddressComplete && (
+                                    <p className="text-[10px] text-amber-500 font-medium pl-1">
+                                        ⚠️ City and Country are required for marketplace access
+                                    </p>
+                                )}
                             </div>
 
                             {/* Buttons */}
@@ -148,7 +213,7 @@ const ProfilePage = () => {
                                                     name: user.name,
                                                     email: user.email,
                                                     phoneNumber: user.phoneNumber || "",
-                                                    address: user.address || ""
+                                                    address: parseAddress(user.address)
                                                 });
                                             }}
                                             className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition"

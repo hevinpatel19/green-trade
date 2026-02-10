@@ -13,10 +13,18 @@ const UserSchema = new mongoose.Schema({
     maxlength: [15, "Phone number cannot exceed 15 digits"],
     match: [/^[0-9]+$/, "Phone number must contain only digits"],
   },
+  // Structured address — single source of truth for all location logic
   address: {
-    type: String,
-    required: false, // Not required during signup, can be added via profile
-    trim: true,
+    streetAddress: { type: String, trim: true, default: "" },
+    city: { type: String, trim: true, default: "" },
+    state: { type: String, trim: true, default: "" },
+    country: { type: String, trim: true, default: "" },
+  },
+  // Internal geo coordinates — NEVER exposed to frontend responses
+  // Recalculated only when profile address changes (city+state+country)
+  coordinates: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
   },
   role: { type: String, default: "user" }, // Can be 'user' or 'admin'
   createdAt: { type: Date, default: Date.now },

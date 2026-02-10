@@ -1,6 +1,36 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// ── Geocode Helper ──
+// Converts city + state + country → { lat, lng } using OpenWeatherMap Geo API
+// Returns null if geocoding fails (invalid address)
+const geocodeAddress = async (city, state, country) => {
+  try {
+    if (!city || !country) return null;
+    const query = `${city},${state || ""},${country}`;
+    const res = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=1&appid=${process.env.WEATHER_API_KEY}`
+    );
+    if (!res.data || res.data.length === 0) return null;
+    return { lat: res.data[0].lat, lng: res.data[0].lon };
+  } catch (err) {
+    console.error("❌ Geocoding failed:", err.message);
+    return null;
+  }
+};
+
+// Helper: strip coordinates from user object before sending to frontend
+const sanitizeUser = (userObj) => {
+  const obj = typeof userObj.toObject === "function" ? userObj.toObject() : { ...userObj };
+  delete obj.coordinates;
+  delete obj.password;
+  return obj;
+};
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -53,19 +83,21 @@ export const registerUser = async (req, res) => {
       email,
       password: hashedPassword,
       phoneNumber,
-      address: undefined, // Address not collected during signup
+      address: { streetAddress: "", city: "", state: "", country: "" },
+      coordinates: { lat: null, lng: null },
       role: role || "buyer",
     });
 
     if (user) {
       console.log("✅ User Created:", user.email);
+      const safe = sanitizeUser(user);
       res.status(201).json({
-        _id: user.id,
-        name: user.name,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        address: user.address,
-        role: user.role,
+        _id: safe._id,
+        name: safe.name,
+        email: safe.email,
+        phoneNumber: safe.phoneNumber,
+        address: safe.address,
+        role: safe.role,
         token: generateToken(user.id),
       });
     } else {
@@ -95,13 +127,14 @@ export const loginUser = async (req, res) => {
 
     if (user && isMatch) {
       console.log("✅ Login Successful:", user.email);
+      const safe = sanitizeUser(user);
       res.json({
-        _id: user.id,
-        name: user.name,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        address: user.address,
-        role: user.role,
+        _id: safe._id,
+        name: safe.name,
+        email: safe.email,
+        phoneNumber: safe.phoneNumber,
+        address: safe.address,
+        role: safe.role,
         token: generateToken(user.id),
       });
     } else {
@@ -121,7 +154,7 @@ export const getMe = async (req, res) => {
   res.status(200).json({ message: "Profile route working" });
 };
 
-// @desc    Update User Profile (Name & Email ONLY)
+// @desc    Update User Profile (Name, Email, Address)
 // @route   PUT /api/auth/profile
 export const updateProfile = async (req, res) => {
   try {
@@ -151,20 +184,54 @@ export const updateProfile = async (req, res) => {
         user.phoneNumber = req.body.phoneNumber || undefined;
       }
 
-      // Update address if provided
-      if (req.body.address !== undefined) {
-        user.address = req.body.address || undefined;
+      // ── Update structured address & recalculate coordinates ──
+      if (req.body.address !== undefined && typeof req.body.address === "object") {
+        const newAddr = req.body.address;
+        const oldAddr = user.address || {};
+
+        // Check if location-relevant fields changed (city/state/country)
+        const locationChanged =
+          (newAddr.city || "") !== (oldAddr.city || "") ||
+          (newAddr.state || "") !== (oldAddr.state || "") ||
+          (newAddr.country || "") !== (oldAddr.country || "");
+
+        // Update all 4 address fields
+        user.address = {
+          streetAddress: newAddr.streetAddress || "",
+          city: newAddr.city || "",
+          state: newAddr.state || "",
+          country: newAddr.country || "",
+        };
+
+        // Recalculate coordinates ONLY when city/state/country change
+        if (locationChanged) {
+          if (newAddr.city && newAddr.country) {
+            const coords = await geocodeAddress(newAddr.city, newAddr.state, newAddr.country);
+            if (coords) {
+              user.coordinates = coords;
+              console.log(`📍 Geocoded ${newAddr.city}, ${newAddr.state}, ${newAddr.country} → ${coords.lat}, ${coords.lng}`);
+            } else {
+              return res.status(400).json({
+                message: "Could not verify address location. Please check your city, state, and country."
+              });
+            }
+          } else {
+            // Clear coordinates if city or country is removed
+            user.coordinates = { lat: null, lng: null };
+          }
+        }
       }
 
       const updatedUser = await user.save();
+      const safe = sanitizeUser(updatedUser);
 
       res.json({
-        _id: updatedUser._id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        phoneNumber: updatedUser.phoneNumber,
-        address: updatedUser.address,
-        role: updatedUser.role,
+        _id: safe._id,
+        name: safe.name,
+        email: safe.email,
+        phoneNumber: safe.phoneNumber,
+        address: safe.address,
+        role: safe.role,
         token: req.body.token // Keep the existing token so they don't get logged out
       });
     } else {

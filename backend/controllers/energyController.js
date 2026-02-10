@@ -1,4 +1,5 @@
-import EnergyListing from "../models/EnergyListing.js"; 
+import EnergyListing from "../models/EnergyListing.js";
+import User from "../models/User.js";
 
 export const getAllEnergy = async (req, res) => {
   try {
@@ -21,21 +22,29 @@ export const listEnergy = async (req, res) => {
       throw new Error(`Missing Fields! Got: Address=${sellerAddress}, Amount=${energyAmount}, Price=${pricePerKwh}`);
     }
 
-    // 2. Calculate values
+    // 2. Look up seller's profile coordinates
+    let sellerCoordinates = { lat: null, lng: null };
+    const seller = await User.findOne({ email: sellerAddress });
+    if (seller && seller.coordinates && seller.coordinates.lat != null) {
+      sellerCoordinates = { lat: seller.coordinates.lat, lng: seller.coordinates.lng };
+    }
+
+    // 3. Calculate values
     const amount = parseFloat(energyAmount);
     const price = parseFloat(pricePerKwh);
     const total = amount * price;
 
     if (isNaN(total)) {
-        throw new Error(`Math Failed! Amount (${energyAmount}) or Price (${pricePerKwh}) is invalid.`);
+      throw new Error(`Math Failed! Amount (${energyAmount}) or Price (${pricePerKwh}) is invalid.`);
     }
 
-    // 3. Construct the object (Note: I removed totalPrice requirement from code logic to test)
+    // 4. Construct the object
     const newListing = new EnergyListing({
       sellerAddress,
+      sellerCoordinates,
       energyAmount: amount,
       pricePerKwh: price,
-      totalPrice: total, 
+      totalPrice: total,
       isSold: false
     });
 
@@ -48,10 +57,10 @@ export const listEnergy = async (req, res) => {
   } catch (error) {
     console.error("❌ CRASH:", error.message);
     // SEND THE ACTUAL ERROR TO THE FRONTEND
-    res.status(500).json({ 
-        message: "Listing Failed", 
-        detailed_error: error.message, // <--- THIS is what we need to see
-        stack: error.stack 
+    res.status(500).json({
+      message: "Listing Failed",
+      detailed_error: error.message, // <--- THIS is what we need to see
+      stack: error.stack
     });
   }
 };
