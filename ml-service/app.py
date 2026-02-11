@@ -6,25 +6,34 @@ import pandas as pd
 from datetime import datetime
 
 # Feature names for sklearn model (to avoid warnings)
-FEATURE_NAMES = ['temperature', 'humidity', 'cloud_cover', 'hour']
+SOLAR_FEATURES = ['temperature', 'humidity', 'cloud_cover', 'hour']
+MARKET_FEATURES = ['hour', 'cloud_cover', 'temperature']
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Load Model
+# --- LOAD MODELS ---
 try:
-    model = joblib.load('solar_model.pkl')
-    print("✅ AI Strategic Advisor Loaded")
+    solar_model = joblib.load('solar_model.pkl')
+    print("✅ Solar Energy Model Loaded")
 except Exception as e:
-    print(f"❌ Model Error: {e}")
-    model = None
+    print(f"❌ Solar Model Error: {e}")
+    solar_model = None
+
+try:
+    market_model = joblib.load('market_model.pkl')
+    print("✅ Market AI Analyst Loaded")
+except Exception as e:
+    print(f"❌ Market Model Error: {e} (Did you run train_market_model.py?)")
+    market_model = None
+
 
 @app.route('/predict-energy', methods=['POST', 'OPTIONS'])
 def predict_energy():
     if request.method == "OPTIONS":
         return jsonify({'status': 'ok'}), 200
 
-    if not model:
+    if not solar_model:
         return jsonify({'error': 'Model not loaded'}), 500
 
     data = request.json
@@ -41,35 +50,20 @@ def predict_energy():
             # 1. Simulate Daily Temp Cycle
             sim_temp = base_temp - 5 if (h < 6 or h > 18) else base_temp
             
-            # 2. Predict Energy Baseline (use DataFrame with feature names)
-            input_data = pd.DataFrame([[sim_temp, humidity, clouds, h]], columns=FEATURE_NAMES)
-            pred_energy = max(0, model.predict(input_data)[0])
+            # 2. Predict Energy Baseline
+            input_data = pd.DataFrame([[sim_temp, humidity, clouds, h]], columns=SOLAR_FEATURES)
+            pred_energy = max(0, solar_model.predict(input_data)[0])
             
-            # --- ☁️ THE FIX: AFTERNOON CLOUD PENALTY ☁️ ---
-            # Real Physics: Clouds block low-angle sun (4 PM+) much harder than noon sun.
-            # If clouds > 50%, energy at 16:00+ drops drastically.
+            # --- ☁️ AFTERNOON CLOUD PENALTY ☁️ ---
             if clouds > 50 and h >= 15:
-                pred_energy = pred_energy * 0.5  # 50% penalty for cloudy afternoons
-            
+                pred_energy = pred_energy * 0.5 
             if clouds > 80 and h >= 16:
-                pred_energy = pred_energy * 0.2  # 80% penalty for heavy clouds
+                pred_energy = pred_energy * 0.2 
 
-            # 3. Dynamic Pricing Logic
-            # Noon (11-14): Supply High -> Price Low (0.9x)
-            # Evening (16-19): Demand High -> Price High (1.5x)
+            # 3. Dynamic Pricing Logic (Simple heuristic for this specific route)
             hourly_multiplier = 1.0
-            
-            if 11 <= h <= 14: 
-                hourly_multiplier = 0.90 
-            elif 16 <= h <= 19: 
-                # If it's cloudy, scarcity makes price go even higher
-                if clouds > 50:
-                    hourly_multiplier = 1.7 # Super High Demand
-                else:
-                    hourly_multiplier = 1.3 # Normal High Demand
-            
-            # Add small random fluctuation so it doesn't look robotic
-            hourly_multiplier += np.random.uniform(-0.05, 0.05)
+            if 11 <= h <= 14: hourly_multiplier = 0.90 
+            elif 16 <= h <= 19: hourly_multiplier = 1.5
 
             # 4. Calculate Revenue for this hour
             revenue = pred_energy * hourly_multiplier
@@ -83,35 +77,20 @@ def predict_energy():
 
             total_24h_energy += pred_energy
 
-        # 5. FIND THE GOLDEN HOUR
-        # Now, if it's cloudy:
-        # 16:00 Energy is tiny (due to penalty). 
-        # Even with 1.7x price, the revenue will be low.
-        # Winner -> Noon (12:00)
-        
-        # If it's sunny:
-        # 16:00 Energy is good. 
-        # 1.3x price makes it valuable.
-        # Winner -> Evening (16:00 or 17:00)
-        
         best_hour_data = max(hourly_forecast, key=lambda x: x['potential_revenue'])
         
-        # 6. MARKET STATUS
+        # MARKET STATUS (Simple efficiency check)
         capacity = 500
         efficiency = (total_24h_energy / capacity) * 100
-        
-        current_multiplier = 1.0
         status = "Balanced Market"
+        current_multiplier = 1.0
         
         if efficiency < 20:
-            current_multiplier = 1.8 + np.random.uniform(0, 0.2)
             status = "Critical Shortage ☁️"
-        elif efficiency < 50:
-            current_multiplier = 1.3 + np.random.uniform(0, 0.1)
-            status = "High Demand"
+            current_multiplier = 1.8
         elif efficiency > 80:
-            current_multiplier = 0.8 + np.random.uniform(-0.05, 0.05)
             status = "Surplus Supply ☀️"
+            current_multiplier = 0.8
 
         return jsonify({
             'predicted_energy': round(total_24h_energy, 2),
@@ -127,27 +106,21 @@ def predict_energy():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# ✅ NEW: Forecast-based prediction with sunrise/sunset clamp
-# ✅ UPDATED: Now handles global timezones & calculates maximum revenue
-# ✅ UPDATED: Now handles User Consumption & Calculates Net Excess
-# ✅ UPDATED: Now handles User Consumption & Calculates Net Excess
+
 @app.route('/predict-energy-forecast', methods=['POST', 'OPTIONS'])
 def predict_energy_forecast():
     if request.method == "OPTIONS":
         return jsonify({'status': 'ok'}), 200
 
-    if not model:
-        return jsonify({'error': 'Model not loaded'}), 500
+    if not solar_model:
+        return jsonify({'error': 'Solar Model not loaded'}), 500
 
     data = request.json
-    
     forecast_points = data.get('forecast')
     sunrise = data.get('sunrise')
     sunset = data.get('sunset')
     timezone_offset = data.get('timezone_offset', 0) 
     
-    # ✅ NEW: Get user's expected consumption for next 24 hours
-    # Accepts expected_consumption_24h with fallback to consumption for compatibility
     expected_consumption_24h = data.get('expected_consumption_24h')
     if expected_consumption_24h is None:
         expected_consumption_24h = data.get('consumption', 0)
@@ -176,25 +149,21 @@ def predict_energy_forecast():
             if not is_daylight:
                 pred_energy = 0
             else:
-                input_data = pd.DataFrame([[temp, humidity, clouds, forecast_hour]], columns=FEATURE_NAMES)
-                pred_energy = max(0, model.predict(input_data)[0])
+                input_data = pd.DataFrame([[temp, humidity, clouds, forecast_hour]], columns=SOLAR_FEATURES)
+                pred_energy = max(0, solar_model.predict(input_data)[0])
                 
-                # Cloud penalties for accurate prediction
                 if clouds > 50 and forecast_hour >= 15: pred_energy *= 0.5
                 if clouds > 80 and forecast_hour >= 16: pred_energy *= 0.2
             
-            # Each forecast point represents 3 hours
             interval_energy = pred_energy * 3
             total_generated += interval_energy
                 
-        # Calculate Net Energy (Generated - Consumed)
         net_energy = total_generated - user_consumption
         
-        # Generate simple advisor message based on surplus/deficit
         if net_energy <= 0:
             recommend_sell = False
             recommended_sell_kwh = 0
-            advice_msg = f"DEFICIT: You will generate {round(total_generated, 1)} kWh but consume {user_consumption} kWh. You need to BUY {abs(round(net_energy, 1))} kWh from the grid. Do not sell today."
+            advice_msg = f"DEFICIT: You will generate {round(total_generated, 1)} kWh but consume {user_consumption} kWh. Do not sell."
         else:
             recommend_sell = True
             recommended_sell_kwh = round(net_energy, 2)
@@ -214,76 +183,60 @@ def predict_energy_forecast():
     except Exception as e:
         print(f"❌ Forecast Prediction Error: {e}")
         return jsonify({'error': str(e)}), 400
-    
-    
+
+
 @app.route('/market-forecast', methods=['POST'])
 def market_forecast():
+    """
+    Uses the trained AI Market Model to predict the Live Index.
+    Stable, Economics-based, No Randomness.
+    """
     try:
         data = request.json
         clouds = float(data.get('cloud_cover'))
-        
-        # --- 1. CALCULATE SUPPLY (Weather Dependent) ---
-        # 0 Clouds = 100 Supply (Max)
-        # 100 Clouds = 10 Supply (Min)
-        supply_score = max(10, 100 - clouds) 
-        
-        # --- 2. CALCULATE DEMAND (Time Dependent) ---
+        # If frontend doesn't send temp, assume 30°C (neutral temp)
+        temp = float(data.get('temperature', 30)) 
         current_hour = datetime.now().hour
-        demand_score = 50 # Default neutral
         
-        if 7 <= current_hour < 11:
-            # Morning Rush
-            demand_score = np.random.uniform(70, 90)
-            phase = "Morning Peak 🌅"
-        elif 11 <= current_hour < 17:
-            # Work Hours (Low home usage)
-            demand_score = np.random.uniform(40, 60)
-            phase = "Afternoon Lull 📉"
-        elif 17 <= current_hour < 22:
-            # Evening Peak (Highest Demand)
-            demand_score = np.random.uniform(85, 100)
-            phase = "Evening Surge 🏠"
-        else:
-            # Night
-            demand_score = np.random.uniform(20, 40)
-            phase = "Night Quiet 🌙"
+        market_index = 1.0 # Default
+
+        # --- AI PREDICTION ---
+        if market_model:
+            # Prepare input exactly how we trained it: [hour, cloud_cover, temperature]
+            input_data = pd.DataFrame([[current_hour, clouds, temp]], 
+                                    columns=MARKET_FEATURES)
             
-        # --- 3. THE LIVE PRICE FORMULA ---
-        # Multiplier = Demand / Supply
-        # Example: High Demand (90) / Low Supply (30) = 3.0x Price (Expensive!)
-        # Example: Low Demand (40) / High Supply (90) = 0.44x Price (Cheap!)
-        
-        live_multiplier = demand_score / supply_score
-        
-        # Clamp multiplier to realistic limits (0.5x to 3.0x)
-        live_multiplier = max(0.5, min(3.0, live_multiplier))
-        
-        # Base Price Calculation
-        base_price = 10.0
-        fair_price = base_price * live_multiplier
-        
-        # --- 4. GENERATE MARKET ADVICE ---
-        trend = "STABLE"
-        advice = "Market is balanced."
-        
-        if live_multiplier > 1.5:
+            # Get prediction
+            prediction = market_model.predict(input_data)[0]
+            market_index = round(prediction, 2)
+        else:
+            print("⚠️ Warning: Market Model not loaded. Using fallback 1.0")
+
+        # --- GENERATE ADVICE TEXT ---
+        if market_index >= 1.4:
             trend = "HIGH DEMAND 📈"
-            advice = f"Demand ({int(demand_score)}) is outstripping Supply ({int(supply_score)}). Sellers Market!"
-        elif live_multiplier < 0.8:
+            advice = "Seller's Market! Grid is under stress."
+            phase = "High Demand"
+        elif market_index <= 0.7:
             trend = "OVERSUPPLY 📉"
-            advice = f"Supply ({int(supply_score)}) is high but Demand ({int(demand_score)}) is low. Buyers Market!"
+            advice = "Buyer's Market! Too much solar on grid."
+            phase = "Surplus Supply"
         else:
             trend = "BALANCED ⚖️"
-            advice = "Supply and Demand are perfectly matched."
+            advice = "Supply matches Demand."
+            phase = "Stable Market"
+
+        # Calculate a display price (Base 10 * Index)
+        fair_price = 10.0 * market_index
 
         return jsonify({
+            'market_index': market_index, # The Smart AI Multiplier
             'fair_price': round(fair_price, 2),
             'trend': trend,
             'advice': advice,
-            'supply_score': int(supply_score),
-            'demand_score': int(demand_score),
-            'live_multiplier': round(live_multiplier, 2),
-            'condition': phase
+            'condition': phase,
+            'live_multiplier': market_index,
+            'live_data': {'hour': current_hour, 'clouds': clouds, 'temp': temp}
         })
 
     except Exception as e:
