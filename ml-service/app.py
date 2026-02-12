@@ -27,7 +27,6 @@ except Exception as e:
     print(f"❌ Market Model Error: {e} (Did you run train_market_model.py?)")
     market_model = None
 
-
 @app.route('/predict-energy', methods=['POST', 'OPTIONS'])
 def predict_energy():
     if request.method == "OPTIONS":
@@ -38,68 +37,82 @@ def predict_energy():
 
     data = request.json
     try:
+        # --- 1. GET WEATHER DATA ---
         base_temp = float(data.get('temperature'))
         humidity = float(data.get('humidity'))
         clouds = float(data.get('cloud_cover'))
         
+        # --- 2. GET SOLAR CAPACITY (THE FIX) ---
+        # We look for 'solar_capacity_kw'. If missing, default to 1kW.
+        user_capacity_kw = float(data.get('solar_capacity_kw', 1.0))
+
         total_24h_energy = 0
         hourly_forecast = [] 
         
         # 🔄 GENERATE 24-HOUR FORECAST
         for h in range(24):
-            # 1. Simulate Daily Temp Cycle
+            # Simulate Daily Temp Cycle
             sim_temp = base_temp - 5 if (h < 6 or h > 18) else base_temp
             
-            # 2. Predict Energy Baseline
+            # Predict "Unit Energy" (Energy for 1kW system)
             input_data = pd.DataFrame([[sim_temp, humidity, clouds, h]], columns=SOLAR_FEATURES)
-            pred_energy = max(0, solar_model.predict(input_data)[0])
+            unit_prediction = max(0, solar_model.predict(input_data)[0])
             
-            # --- ☁️ AFTERNOON CLOUD PENALTY ☁️ ---
+            # Afternoon Cloud Penalty
             if clouds > 50 and h >= 15:
-                pred_energy = pred_energy * 0.5 
+                unit_prediction = unit_prediction * 0.5 
             if clouds > 80 and h >= 16:
-                pred_energy = pred_energy * 0.2 
+                unit_prediction = unit_prediction * 0.2 
 
-            # 3. Dynamic Pricing Logic (Simple heuristic for this specific route)
+            # --- 3. APPLY SCALING (THE MATH FIX) ---
+            # Multiply the Unit Prediction by the User's System Size
+            final_energy = unit_prediction * user_capacity_kw
+
+            # Dynamic Pricing Logic
             hourly_multiplier = 1.0
             if 11 <= h <= 14: hourly_multiplier = 0.90 
             elif 16 <= h <= 19: hourly_multiplier = 1.5
 
-            # 4. Calculate Revenue for this hour
-            revenue = pred_energy * hourly_multiplier
+            # Calculate Revenue
+            revenue = final_energy * hourly_multiplier
 
             hourly_forecast.append({
                 "hour": h,
-                "energy": pred_energy,
+                "energy": round(final_energy, 3), # Valid scaled energy
+                "unit_efficiency": round(unit_prediction, 3), # Debug info
                 "price_multiplier": round(hourly_multiplier, 2),
-                "potential_revenue": revenue
+                "potential_revenue": round(revenue, 2)
             })
 
-            total_24h_energy += pred_energy
+            total_24h_energy += final_energy
 
         best_hour_data = max(hourly_forecast, key=lambda x: x['potential_revenue'])
         
-        # MARKET STATUS (Simple efficiency check)
-        capacity = 500
-        efficiency = (total_24h_energy / capacity) * 100
+        # MARKET STATUS LOGIC
+        # We check efficiency based on "Unit Prediction" relative to 1.0 (max possible)
+        # Average daylight efficiency (hours 7-17)
+        daylight_hours = [x['unit_efficiency'] for x in hourly_forecast if 7 <= x['hour'] <= 17]
+        avg_efficiency = np.mean(daylight_hours) if daylight_hours else 0
+        
         status = "Balanced Market"
         current_multiplier = 1.0
         
-        if efficiency < 20:
+        if avg_efficiency < 0.2: # Low efficiency
             status = "Critical Shortage ☁️"
             current_multiplier = 1.8
-        elif efficiency > 80:
+        elif avg_efficiency > 0.8: # High efficiency
             status = "Surplus Supply ☀️"
             current_multiplier = 0.8
 
         return jsonify({
+            'solar_capacity_kw': user_capacity_kw, # Confirming size back to user
             'predicted_energy': round(total_24h_energy, 2),
             'price_multiplier': round(current_multiplier, 2),
             'market_status': status,
             'advisor': {
                 'best_hour': best_hour_data['hour'],
                 'max_multiplier': best_hour_data['price_multiplier'],
-                'message': f"Recommendation: Sell at {best_hour_data['hour']}:00 (Rate: {best_hour_data['price_multiplier']}x)"
+                'message': f"Recommendation: Sell at {best_hour_data['hour']}:00 (Yield: {best_hour_data['energy']} kWh)"
             }
         })
 
@@ -119,7 +132,11 @@ def predict_energy_forecast():
     forecast_points = data.get('forecast')
     sunrise = data.get('sunrise')
     sunset = data.get('sunset')
-    timezone_offset = data.get('timezone_offset', 0) 
+    timezone_offset = data.get('timezone_offset', 0)
+    
+    # --- FIX 1: GET SOLAR CAPACITY ---
+    # Default to 1.0 if missing
+    user_capacity_kw = float(data.get('solar_capacity_kw', 1.0)) 
     
     expected_consumption_24h = data.get('expected_consumption_24h')
     if expected_consumption_24h is None:
@@ -147,15 +164,22 @@ def predict_energy_forecast():
             is_daylight = sunrise_hour <= forecast_hour < sunset_hour
             
             if not is_daylight:
-                pred_energy = 0
+                actual_kwh = 0 # No sun, no power
             else:
+                # 1. Predict Unit Efficiency (for 1kW)
                 input_data = pd.DataFrame([[temp, humidity, clouds, forecast_hour]], columns=SOLAR_FEATURES)
-                pred_energy = max(0, solar_model.predict(input_data)[0])
+                unit_prediction = max(0, solar_model.predict(input_data)[0])
                 
-                if clouds > 50 and forecast_hour >= 15: pred_energy *= 0.5
-                if clouds > 80 and forecast_hour >= 16: pred_energy *= 0.2
+                # Cloud penalties
+                if clouds > 50 and forecast_hour >= 15: unit_prediction *= 0.5
+                if clouds > 80 and forecast_hour >= 16: unit_prediction *= 0.2
+                
+                # --- FIX 2: APPLY SCALING ---
+                # Multiply Unit Prediction by User Capacity
+                actual_kwh = unit_prediction * user_capacity_kw
             
-            interval_energy = pred_energy * 3
+            # Since forecast points are every 3 hours:
+            interval_energy = actual_kwh * 3
             total_generated += interval_energy
                 
         net_energy = total_generated - user_consumption
@@ -170,6 +194,7 @@ def predict_energy_forecast():
             advice_msg = f"SURPLUS: You have {round(net_energy, 1)} kWh of excess energy available to sell."
         
         return jsonify({
+            'solar_capacity_kw': user_capacity_kw, # Return for debugging
             'total_generated': round(total_generated, 2),
             'user_consumption': user_consumption,
             'net_energy': round(net_energy, 2),

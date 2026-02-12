@@ -18,6 +18,7 @@ const Dashboard = () => {
   // --- State ---
   const [consumption, setConsumption] = useState(15);
   const [sellAmount, setSellAmount] = useState("");
+  const [solarCapacity, setSolarCapacity] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
@@ -104,7 +105,8 @@ const Dashboard = () => {
         sunrise: d.sys.sunrise,
         sunset: d.sys.sunset,
         timezone_offset: d.timezone,
-        expected_consumption_24h: parseFloat(consumption)
+        expected_consumption_24h: parseFloat(consumption),
+        solar_capacity_kw: parseFloat(solarCapacity) || 1.0
       });
 
       setPredictionData({
@@ -196,6 +198,21 @@ const Dashboard = () => {
                   <span className="font-bold text-gray-800">{sellerAddr.city}, {sellerAddr.state ? sellerAddr.state + ", " : ""}{sellerAddr.country}</span>
                 </div>
                 <p className="text-[10px] text-gray-400">Location is auto-synced from your profile address. Update your profile to change it.</p>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Solar Capacity (kW)</label>
+                  <input
+                    type="number"
+                    value={solarCapacity}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "" || Number(val) >= 0) setSolarCapacity(val);
+                    }}
+                    step="0.1"
+                    min="0"
+                    placeholder="e.g. 3.5"
+                    className="w-full mt-1 p-3 bg-white border border-gray-300 rounded-lg font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase">Expected Consumption (Next 24 hours) (kWh)</label>
                   <input
