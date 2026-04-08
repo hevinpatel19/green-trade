@@ -8,12 +8,13 @@ import {
     getPlatformStats,
     buyListing,
     placeBid,
-    getDynamicFeed
+    getDynamicFeed,
+    closeExpiredAuctions
 } from "../controllers/marketController.js";
 
 const router = express.Router();
 
-// 0. Dynamic Feed (City-gated, with dynamic pricing)
+// 0. Dynamic Feed (City-gated, with dynamic pricing + auctions)
 router.get("/dynamic-feed", getDynamicFeed);
 
 // 1. Get Market Feed (Fixed Price ONLY - Public)
@@ -35,5 +36,8 @@ router.delete("/:id", deleteListing);
 // 6. Buying & Bidding Logic
 router.put("/buy/:id", buyListing); // For "Buy Now" (marks as matched, payment verified separately)
 router.post("/bid/:id", placeBid);  // For "Place Bid"
+
+// 7. Auction Auto-Close (manual trigger)
+router.post("/close-expired", closeExpiredAuctions);
 
 export default router;

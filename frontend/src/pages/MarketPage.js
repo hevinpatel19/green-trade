@@ -10,6 +10,8 @@ const MarketPage = () => {
 
     // ── MARKET DATA ──
     const [listings, setListings] = useState([]);
+    const [auctions, setAuctions] = useState([]);
+    const [auctionTimers, setAuctionTimers] = useState({});
     const [marketData, setMarketData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [filter, setFilter] = useState("All");
@@ -44,6 +46,7 @@ const MarketPage = () => {
                 );
                 if (cancelled) return;
                 setListings(data.listings);
+                setAuctions(data.auctions || []);
                 setMarketData(data.market);
             } catch (err) {
                 if (cancelled) return;
@@ -78,11 +81,13 @@ const MarketPage = () => {
             setShowForm(false);
             // Re-fetch dynamic feed
             setListings([]);
+            setAuctions([]);
             setLoading(true);
             const { data } = await axios.get(
                 `http://localhost:5000/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`
             );
             setListings(data.listings);
+            setAuctions(data.auctions || []);
             setMarketData(data.market);
             setLoading(false);
         } catch (err) {
@@ -97,9 +102,42 @@ const MarketPage = () => {
         navigate("/checkout", { state: { item: updatedItem } });
     };
 
+    // ── Auction navigation ──
+    const handleBidClick = (item) => {
+        if (!user) return toast.error("Please Login First");
+        navigate("/auction", { state: { item } });
+    };
+
+    // ── Auction countdown timers ──
+    useEffect(() => {
+        if (auctions.length === 0) return;
+        const tick = () => {
+            const now = new Date();
+            const timers = {};
+            auctions.forEach((a) => {
+                const diff = new Date(a.auctionEndsAt) - now;
+                if (diff <= 0) {
+                    timers[a._id] = "EXPIRED";
+                } else {
+                    const h = Math.floor(diff / (1000 * 60 * 60));
+                    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const s = Math.floor((diff % (1000 * 60)) / 1000);
+                    timers[a._id] = `${h}h ${m}m ${s}s`;
+                }
+            });
+            setAuctionTimers(timers);
+        };
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [auctions]);
+
     // ── Filter ──
     const filteredListings =
         filter === "All" ? listings : listings.filter((item) => item.energyType === filter);
+
+    const filteredAuctions =
+        filter === "All" ? auctions : auctions.filter((item) => item.energyType === filter);
 
     // ── Multiplier color helper ──
     const multiplierColor = (m) => (m > 1.2 ? "text-red-600" : m < 0.9 ? "text-blue-600" : "text-green-600");
@@ -337,6 +375,86 @@ const MarketPage = () => {
                     ))
                 )}
             </div>
+
+            {/* ACTIVE AUCTIONS SECTION */}
+            {filteredAuctions.length > 0 && (
+                <div className="max-w-7xl mx-auto mt-16">
+                    <div className="mb-6">
+                        <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
+                            🔨 Active Auctions <span className="text-purple-600 animate-pulse">●</span>
+                        </h2>
+                        <p className="mt-1 text-gray-500">Place bids on energy auctions ending soon.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {filteredAuctions.map((item) => (
+                            <div key={item._id} className="bg-white rounded-2xl shadow-sm border border-purple-100 hover:shadow-xl transition-all duration-300 relative group overflow-hidden">
+                                {/* Header */}
+                                <div className="h-24 p-4 flex justify-between items-start bg-gradient-to-br from-purple-50 to-indigo-50">
+                                    <span className="bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                                        AUCTION
+                                    </span>
+                                    <span className="bg-white/90 backdrop-blur text-xs font-bold px-3 py-1 rounded-full text-gray-700">
+                                        {item.energyType}
+                                    </span>
+                                </div>
+
+                                {/* Body */}
+                                <div className="p-6 pt-2">
+                                    <div className="flex justify-between items-end mb-4">
+                                        <div>
+                                            <p className="text-xs text-gray-400 uppercase font-bold">Volume</p>
+                                            <h3 className="text-3xl font-extrabold text-gray-900">
+                                                {item.energyAmount} <span className="text-lg text-gray-400 font-medium">kWh</span>
+                                            </h3>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400 uppercase font-bold">
+                                                {item.highestBid > 0 ? "Current Bid" : "Starting Bid"}
+                                            </p>
+                                            <h3 className="text-2xl font-bold text-purple-600">
+                                                ₹{item.highestBid > 0 ? item.highestBid : item.pricePerKwh}
+                                            </h3>
+                                        </div>
+                                    </div>
+
+                                    {/* Timer */}
+                                    <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between mb-4 border border-gray-100">
+                                        <span className="text-xs font-bold text-gray-500 uppercase">⏱ Time Left</span>
+                                        <span className={`font-mono font-bold text-sm ${
+                                            auctionTimers[item._id] === "EXPIRED" ? "text-red-500" : "text-purple-600"
+                                        }`}>
+                                            {auctionTimers[item._id] || "Loading..."}
+                                        </span>
+                                    </div>
+
+                                    <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-600">
+                                                {item.sellerAddress ? item.sellerAddress.charAt(0).toUpperCase() : "U"}
+                                            </div>
+                                            <div className="text-xs">
+                                                <p className="text-gray-500">Seller</p>
+                                                <p className="font-bold text-gray-800 truncate w-24">{item.sellerAddress}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleBidClick(item)}
+                                            disabled={auctionTimers[item._id] === "EXPIRED"}
+                                            className={`px-6 py-2 rounded-lg font-bold text-white shadow-lg transition transform active:scale-95 ${
+                                                auctionTimers[item._id] === "EXPIRED"
+                                                    ? "bg-gray-400 cursor-not-allowed"
+                                                    : "bg-purple-600 hover:bg-purple-700"
+                                            }`}
+                                        >
+                                            {auctionTimers[item._id] === "EXPIRED" ? "Ended" : "Place Bid"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

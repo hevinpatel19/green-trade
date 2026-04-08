@@ -28,7 +28,7 @@ const AuctionPage = () => {
         // Fetch latest auction data to ensure we have fresh bid info
         const fetchLatestListing = async () => {
             try {
-                const res = await axios.get(`http://localhost:5000/api/market/feed`);
+                const res = await axios.get(`http://localhost:5000/api/market/auctions`);
                 const latestItem = res.data.find(l => l._id === item._id);
                 if (latestItem) {
                     setListing(latestItem);

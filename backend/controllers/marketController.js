@@ -112,14 +112,30 @@ export const getDynamicFeed = async (req, res) => {
     const advice = mlData?.advice ?? "Market data limited.";
     const condition = mlData?.condition ?? "Default";
 
-    // ── 7. Fetch listings, filter by radius, apply dynamic pricing ──
+    // ── 7. Fetch fixed-price listings, filter by radius, apply dynamic pricing ──
     const allListings = await EnergyListing.find({
       isSold: false,
       isAuction: false,
     }).sort({ createdAt: -1 });
 
+    // ── 7b. Fetch active auctions (non-expired, not sold) ──
+    const now = new Date();
+    const allAuctions = await EnergyListing.find({
+      isSold: false,
+      isAuction: true,
+      auctionEndsAt: { $gt: now }
+    }).sort({ auctionEndsAt: 1 });
+
     // Radius filter: only listings whose seller is within SELLING_RADIUS_KM of the buyer
     const nearbyListings = allListings.filter((item) => {
+      const sc = item.sellerCoordinates;
+      if (!sc || sc.lat == null || sc.lng == null) return false;
+      const dist = haversineDistance(buyerCoords, { lat: sc.lat, lng: sc.lng });
+      return dist <= SELLING_RADIUS_KM;
+    });
+
+    // Radius filter for auctions too
+    const nearbyAuctions = allAuctions.filter((item) => {
       const sc = item.sellerCoordinates;
       if (!sc || sc.lat == null || sc.lng == null) return false;
       const dist = haversineDistance(buyerCoords, { lat: sc.lat, lng: sc.lng });
@@ -136,6 +152,7 @@ export const getDynamicFeed = async (req, res) => {
 
     res.json({
       listings: pricedListings,
+      auctions: nearbyAuctions.map(stripCoords),
       market: {
         city: resolvedCity,
         multiplier,
@@ -407,5 +424,50 @@ export const getPlatformStats = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching stats" });
+  }
+};
+
+// @desc    Close all expired auctions (auto-finalize)
+// @route   POST /api/market/close-expired  (also called by scheduler)
+export const closeExpiredAuctions = async (req, res) => {
+  try {
+    const now = new Date();
+    const expiredAuctions = await EnergyListing.find({
+      isAuction: true,
+      isSold: false,
+      auctionEndsAt: { $lte: now }
+    });
+
+    let closed = 0;
+    for (const auction of expiredAuctions) {
+      if (auction.bids && auction.bids.length > 0) {
+        // Has bids — mark as completed, assign to highest bidder
+        const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+        auction.isSold = true;
+        auction.status = "completed";
+        auction.buyerAddress = sortedBids[0].bidderEmail;
+        auction.highestBid = sortedBids[0].amount;
+      } else {
+        // No bids — cancel the auction
+        auction.isSold = true;
+        auction.status = "cancelled";
+      }
+      await auction.save();
+      closed++;
+    }
+
+    if (closed > 0) {
+      console.log(`🔒 Auto-closed ${closed} expired auction(s).`);
+    }
+
+    // If called via HTTP route, send response
+    if (res) {
+      res.json({ message: `Closed ${closed} expired auctions.`, closed });
+    }
+  } catch (error) {
+    console.error("Error closing expired auctions:", error.message);
+    if (res) {
+      res.status(500).json({ message: "Error closing expired auctions" });
+    }
   }
 };

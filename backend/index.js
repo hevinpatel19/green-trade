@@ -12,6 +12,9 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import marketRoutes from "./routes/marketRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+
+// Import auction auto-close logic
+import { closeExpiredAuctions } from "./controllers/marketController.js";
 // ...
 
 dotenv.config();
@@ -45,6 +48,12 @@ mongoose
       // If the index is already gone, this is fine
       console.log("ℹ️ Index cleanup:", err.message);
     }
+
+    // ── Auction auto-close scheduler (every 60 seconds) ──
+    setInterval(() => {
+      closeExpiredAuctions(null, null);
+    }, 60 * 1000);
+    console.log("⏱️ Auction auto-close scheduler started (every 60s).");
   })
   .catch((err) => console.log("⚠️ MongoDB Not Connected"));
 
