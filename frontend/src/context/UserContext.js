@@ -26,6 +26,13 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  // Update user data in state + localStorage WITHOUT navigation
+  // Use this for profile updates, not login
+  const updateUser = (userData) => {
+    localStorage.setItem("userInfo", JSON.stringify(userData));
+    setUser(userData);
+  };
+
   const logout = () => {
     localStorage.removeItem("userInfo");
     setUser(null);
@@ -33,7 +40,7 @@ export const UserProvider = ({ children }) => {
   };
 
   return (
-    <UserContext.Provider value={{ user, login, logout, loading }}>
+    <UserContext.Provider value={{ user, login, updateUser, logout, loading }}>
       {children}
     </UserContext.Provider>
   );

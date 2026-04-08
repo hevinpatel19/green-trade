@@ -1,5 +1,6 @@
 import React, { useContext } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 
 // Context
 import UserContext, { UserProvider } from "./context/UserContext";
@@ -15,50 +16,70 @@ import CheckoutPage from "./pages/CheckoutPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import OrderPage from "./pages/OrderPage";
-import ProfilePage from "./pages/ProfilePage"; // ✅ Imported here
-import AuctionPage from "./pages/AuctionPage"; // ✅ IMPORT THIS
-import AdminPage from "./pages/AdminPage"; // ✅ Admin Dashboard
+import ProfilePage from "./pages/ProfilePage";
+import AuctionPage from "./pages/AuctionPage";
+import AdminPage from "./pages/AdminPage";
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext);
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-midnight flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm font-medium">Loading...</p>
+      </div>
+    </div>
+  );
   return user ? children : <Navigate to="/login" />;
 };
 
 const AdminRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext);
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-midnight flex items-center justify-center">
+      <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
   if (!user) return <Navigate to="/login" />;
   if (user.role !== "admin") return <Navigate to="/" />;
   return children;
+};
+
+const AnimatedRoutes = () => {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Public Routes */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/market" element={<MarketPage />} />
+
+        {/* Private Routes */}
+        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
+        <Route path="/orders" element={<PrivateRoute><OrderPage /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+        <Route path="/auction" element={<PrivateRoute><AuctionPage /></PrivateRoute>} />
+
+        {/* Admin Route */}
+        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+      </Routes>
+    </AnimatePresence>
+  );
 };
 
 function App() {
   return (
     <Router>
       <UserProvider>
-        <div className="min-h-screen bg-gray-50 font-sans">
+        <div className="min-h-screen bg-midnight font-sans text-slate-100">
           <Navbar />
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/market" element={<MarketPage />} />
-
-            {/* Private Routes */}
-            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
-            <Route path="/orders" element={<PrivateRoute><OrderPage /></PrivateRoute>} />
-
-            {/* ✅ ADDED THIS MISSING LINE */}
-            <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
-            {/* ✅ ADD THIS ROUTE TO FIX THE ISSUE */}
-            <Route path="/auction" element={<PrivateRoute><AuctionPage /></PrivateRoute>} />
-
-            {/* ✅ ADMIN ROUTE - Admin only access */}
-            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-          </Routes>
+          <main>
+            <AnimatedRoutes />
+          </main>
         </div>
       </UserProvider>
     </Router>

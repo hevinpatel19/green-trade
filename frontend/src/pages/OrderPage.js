@@ -1,134 +1,128 @@
 import React, { useEffect, useState, useContext } from "react";
 import axios from "axios";
-import UserContext from "../context/UserContext"; // ✅ Use Context
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import UserContext from "../context/UserContext";
+import PageTransition from "../components/PageTransition";
+import ScrollReveal, { StaggerContainer, StaggerItem } from "../components/ScrollReveal";
+import AnimatedCounter from "../components/AnimatedCounter";
+import { Zap, Wind, TrendingUp, ShoppingCart, BarChart3, DollarSign } from "lucide-react";
 
 const OrderPage = () => {
   const { user } = useContext(UserContext);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // AI Stats State
   const [stats, setStats] = useState({ totalEnergy: 0, totalSpent: 0, saved: 0 });
-  const GOVT_GRID_RATE = 15.0; 
+  const GOVT_GRID_RATE = 15.0;
 
-  useEffect(() => {
-    if (user) {
-      fetchOrders();
-    }
-  }, [user]);
+  useEffect(() => { if (user) fetchOrders(); }, [user]);
 
   const fetchOrders = async () => {
     try {
-      // ✅ FIX: Fetch from the FEED (since your backend returns everything there)
-      const res = await axios.get("http://localhost:5000/api/energy/feed");
-      
-      // ✅ LOGIC: Filter for items that are SOLD and match YOUR EMAIL
-      const myOrders = res.data.filter(item => 
-          item.isSold === true && item.buyerAddress === user.email
-      );
-
-      setOrders(myOrders);
-      calculateAIStats(myOrders);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      setLoading(false);
-    }
+      const res = await axios.get(`http://localhost:5000/api/orders/myorders/${encodeURIComponent(user.email)}`);
+      setOrders(res.data); calculateAIStats(res.data); setLoading(false);
+    } catch (error) { console.error(error); setLoading(false); }
   };
 
   const calculateAIStats = (data) => {
-    let energy = 0;
-    let spent = 0;
-    data.forEach(item => {
-        energy += parseFloat(item.energyAmount);
-        const itemTotal = item.totalPrice || (item.energyAmount * item.pricePerKwh);
-        spent += parseFloat(itemTotal);
-    });
-    const gridCost = energy * GOVT_GRID_RATE;
-    const savings = gridCost - spent;
-    setStats({
-        totalEnergy: energy.toFixed(1),
-        totalSpent: spent.toFixed(0),
-        saved: savings.toFixed(0)
-    });
+    let energy = 0, spent = 0;
+    data.forEach(item => { energy += parseFloat(item.energyAmount); spent += parseFloat(item.totalAmount || (item.energyAmount * item.pricePerKwh)); });
+    setStats({ totalEnergy: energy.toFixed(1), totalSpent: spent.toFixed(0), saved: (energy * GOVT_GRID_RATE - spent).toFixed(0) });
   };
 
-  if (!user) return <div className="p-10 text-center">Please Login to view orders.</div>;
+  if (!user) return <div className="min-h-screen bg-midnight flex items-center justify-center text-slate-500">Please Login to view orders.</div>;
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto min-h-screen bg-gray-50">
-      
-      <div className="flex justify-between items-end mb-8">
-        <div>
-            <h2 className="text-3xl font-extrabold text-gray-900">My Portfolio</h2>
-            <p className="text-gray-500">Track your P2P energy acquisitions and savings.</p>
-        </div>
-        <Link to="/market" className="text-green-600 font-bold hover:underline">
-             + Buy More Energy
-        </Link>
-      </div>
+    <PageTransition>
+      <div className="min-h-screen bg-midnight py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto">
 
-      {/* --- AI SAVINGS DASHBOARD --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">⚡</div>
-            <p className="text-blue-100 text-sm mb-1 font-medium">Total Energy Acquired</p>
-            <h3 className="text-4xl font-bold">{stats.totalEnergy} <span className="text-lg opacity-70">kWh</span></h3>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-gray-500 text-sm mb-1 font-medium">Total Investment</p>
-            <h3 className="text-4xl font-bold text-gray-800">₹{stats.totalSpent}</h3>
-        </div>
-        <div className={`p-6 rounded-2xl border shadow-sm ${stats.saved >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-            <p className="text-gray-500 text-sm mb-1 font-bold flex items-center gap-2">
-                🤖 AI Value Analysis
-            </p>
-            <h3 className={`text-4xl font-bold ${stats.saved >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {stats.saved >= 0 ? `+₹${stats.saved}` : `-₹${Math.abs(stats.saved)}`}
-            </h3>
-        </div>
-      </div>
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
+            <div>
+              <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
+                <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 4, repeat: Infinity }}><BarChart3 size={28} className="text-emerald-primary" /></motion.div>
+                My Portfolio
+              </h2>
+              <p className="text-slate-500 mt-1">Track your P2P energy acquisitions and savings.</p>
+            </div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Link to="/market" className="text-emerald-primary hover:text-emerald-glow font-semibold text-sm transition-colors flex items-center gap-1.5">
+                <ShoppingCart size={14} /> Buy More Energy
+              </Link>
+            </motion.div>
+          </motion.div>
 
-      {/* --- ORDERS LIST --- */}
-      <h3 className="text-xl font-bold text-gray-700 mb-4">Transaction History</h3>
-      
-      {loading ? (
-          <div className="text-center py-20 text-gray-400">Syncing Blockchain Records...</div>
-      ) : orders.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <p className="text-xl text-gray-400 font-medium">No transactions found for <b>{user.email}</b>.</p>
-              <Link to="/market" className="mt-4 inline-block bg-green-600 text-white px-6 py-2 rounded-lg font-bold">Go to Market</Link>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ y: -4, scale: 1.01 }} className="bg-gradient-to-br from-accent-cyan/10 to-surface border border-accent-cyan/15 p-6 rounded-2xl relative overflow-hidden card-hover">
+              <div className="absolute top-3 right-3 opacity-10"><Zap size={48} /></div>
+              <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Total Energy Acquired</p>
+              <h3 className="text-3xl font-bold text-slate-100">
+                <AnimatedCounter target={stats.totalEnergy} decimals={1} className="text-3xl font-bold text-slate-100" />
+                <span className="text-sm text-slate-500 ml-1">kWh</span>
+              </h3>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ y: -4, scale: 1.01 }} className="bg-surface border border-glass-light p-6 rounded-2xl card-hover">
+              <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Total Investment</p>
+              <h3 className="text-3xl font-bold text-slate-100">
+                <AnimatedCounter target={stats.totalSpent} prefix="₹" className="text-3xl font-bold text-slate-100" />
+              </h3>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} whileHover={{ y: -4, scale: 1.01 }} className={`p-6 rounded-2xl border card-hover ${stats.saved >= 0 ? "bg-emerald-primary/5 border-emerald-primary/15" : "bg-red-500/5 border-red-500/15"}`}>
+              <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1.5"><TrendingUp size={12} /> AI Value Analysis</p>
+              <h3 className={`text-3xl font-bold ${stats.saved >= 0 ? "text-emerald-glow" : "text-red-400"}`}>
+                <AnimatedCounter target={Math.abs(stats.saved)} prefix={stats.saved >= 0 ? "+₹" : "-₹"} className={`text-3xl font-bold ${stats.saved >= 0 ? "text-emerald-glow" : "text-red-400"}`} />
+              </h3>
+            </motion.div>
           </div>
-      ) : (
-        <div className="space-y-4">
-            {orders.map((order) => (
-                <div key={order._id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center hover:shadow-md transition duration-200 group">
-                    <div className="flex items-center gap-4 w-full md:w-auto">
-                        <div className={`p-3 rounded-full text-2xl ${order.energyType === 'Wind' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                            {order.energyType === 'Wind' ? '💨' : '☀️'}
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                                {order.energyAmount} kWh Bundle
-                                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border">{order.energyType || "Solar"}</span>
-                            </h4>
-                            <p className="text-xs text-gray-400 font-mono mt-1">ID: {order._id}</p>
-                            <p className="text-xs text-gray-500">Seller: {order.sellerAddress}</p>
-                        </div>
+
+          {/* Transaction History */}
+          <ScrollReveal><h3 className="text-lg font-bold text-slate-200 mb-4">Transaction History</h3></ScrollReveal>
+
+          {loading ? (
+            <div className="text-center py-20">
+              <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-slate-600">Syncing records...</p>
+            </div>
+          ) : orders.length === 0 ? (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16 bg-surface rounded-2xl border border-dashed border-glass-light">
+              <DollarSign size={40} className="text-slate-700 mx-auto mb-4" />
+              <p className="text-lg text-slate-500 font-medium">No transactions found for <b className="text-slate-400">{user.email}</b></p>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Link to="/market" className="mt-4 inline-flex items-center gap-2 bg-emerald-primary hover:bg-emerald-glow text-midnight px-6 py-2.5 rounded-xl font-bold transition-colors shadow-glow ripple-btn btn-press"><ShoppingCart size={14} /> Go to Market</Link>
+              </motion.div>
+            </motion.div>
+          ) : (
+            <StaggerContainer className="space-y-3" staggerDelay={0.06}>
+              {orders.map((order) => (
+                <StaggerItem key={order._id}>
+                  <motion.div whileHover={{ x: 4 }} transition={{ type: "spring", stiffness: 300, damping: 20 }} className="bg-surface border border-glass-light rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 card-hover">
+                    <div className="flex items-center gap-4">
+                      <motion.div whileHover={{ rotate: 15 }} className={`p-2.5 rounded-xl ${order.energyType === 'Wind' ? 'bg-accent-cyan/10' : 'bg-accent-amber/10'}`}>
+                        {order.energyType === 'Wind' ? <Wind size={20} className="text-accent-cyan" /> : <Zap size={20} className="text-accent-amber" />}
+                      </motion.div>
+                      <div>
+                        <h4 className="font-bold text-slate-200 flex items-center gap-2">
+                          {order.energyAmount} kWh Bundle
+                          <span className="text-[10px] bg-midnight-200 text-slate-500 px-2 py-0.5 rounded border border-glass-light">{order.energyType || "Solar"}</span>
+                        </h4>
+                        <p className="text-xs text-slate-600 font-mono mt-0.5">ID: {order._id}</p>
+                        <p className="text-xs text-slate-500">Seller: {order.sellerAddress}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between w-full md:w-auto gap-8 mt-4 md:mt-0">
-                        <div className="text-right">
-                            <p className="text-xs text-gray-400 uppercase font-bold">Total Paid</p>
-                            <p className="font-bold text-xl text-gray-900">₹{(order.totalPrice || (order.pricePerKwh * order.energyAmount)).toFixed(2)}</p>
-                        </div>
-                        <div><span className="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-bold border border-green-200">✅ PAID</span></div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right"><p className="text-[10px] text-slate-500 uppercase font-semibold">Total Paid</p><p className="font-bold text-lg text-slate-100">₹{(order.totalAmount || (order.pricePerKwh * order.energyAmount)).toFixed(2)}</p></div>
+                      <span className="px-3 py-1 bg-emerald-primary/10 text-emerald-glow text-xs rounded-lg font-bold border border-emerald-primary/20">✓ PAID</span>
                     </div>
-                </div>
-            ))}
+                  </motion.div>
+                </StaggerItem>
+              ))}
+            </StaggerContainer>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </PageTransition>
   );
 };
 

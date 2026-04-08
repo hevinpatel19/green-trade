@@ -1,109 +1,138 @@
-import React, { useContext } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useContext, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import UserContext from "../context/UserContext";
+import { Menu, X, LogOut, ChevronDown, Shield, LayoutDashboard, ShoppingCart, BarChart3, User } from "lucide-react";
 
 const Navbar = () => {
   const { user, logout } = useContext(UserContext);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
+  const handleLogout = () => { logout(); navigate("/login"); setProfileOpen(false); setMobileOpen(false); };
+  const isActive = (path) => location.pathname === path;
+
+  const navLinks = [
+    { path: "/", label: "Home", public: true },
+    { path: "/market", label: "Market", public: true },
+    { path: "/dashboard", label: "Dashboard", auth: true, icon: LayoutDashboard },
+    { path: "/orders", label: "Orders", auth: true, icon: ShoppingCart },
+  ];
+  const visibleLinks = navLinks.filter((link) => link.public || (link.auth && user));
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
+    <nav className="sticky top-0 z-50 bg-midnight-50/80 backdrop-blur-xl border-b border-glass-light">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20 items-center">
-
+        <div className="flex justify-between h-16 items-center">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="group flex items-center gap-2">
-              <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-green-200 shadow-lg group-hover:scale-110 transition-transform duration-300">
-                ⚡
-              </div>
-              <span className="font-extrabold text-2xl text-gray-900 tracking-tight group-hover:text-green-600 transition-colors">
-                GreenTrade
-              </span>
-            </Link>
-          </div>
+          <Link to="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
+            <motion.div whileHover={{ rotate: 15, scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-9 h-9 bg-gradient-to-br from-emerald-primary to-emerald-glow rounded-lg flex items-center justify-center shadow-glow group-hover:shadow-glow-lg transition-shadow">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+            </motion.div>
+            <span className="text-lg font-bold text-slate-100 tracking-tight">Green<span className="text-emerald-primary">Trade</span></span>
+          </Link>
 
-          {/* Main Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-              HOME
-            </Link>
-            <Link to="/market" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-              MARKET
-            </Link>
-
-            {user && (
-              <>
-                <Link to="/orders" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-                  ORDERS
+          {/* Desktop Nav */}
+          <div className="hidden md:flex items-center gap-1">
+            {visibleLinks.map((link) => (
+              <motion.div key={link.path} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}>
+                <Link to={link.path} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${isActive(link.path) ? "bg-emerald-primary/10 text-emerald-glow" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}>
+                  {link.label}
                 </Link>
-                {/* ✅ DASHBOARD IS NOW VISIBLE FOR EVERYONE LOGGED IN */}
-                <Link to="/dashboard" className="text-sm font-bold text-gray-500 hover:text-green-600 transition">
-                  DASHBOARD
+              </motion.div>
+            ))}
+            {user?.role === "admin" && (
+              <motion.div whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}>
+                <Link to="/admin" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${isActive("/admin") ? "bg-accent-violet/10 text-accent-violet" : "text-accent-violet/70 hover:text-accent-violet hover:bg-accent-violet/5"}`}>
+                  <Shield size={14} /> Admin
                 </Link>
-                {/* ✅ ADMIN BUTTON - Only visible for admin users */}
-                {user.role === "admin" && (
-                  <Link to="/admin" className="text-sm font-bold text-purple-600 hover:text-purple-800 transition flex items-center gap-1">
-                    <span>🛡️</span> ADMIN
-                  </Link>
-                )}
-              </>
+              </motion.div>
             )}
           </div>
 
-          {/* User Actions */}
-          <div className="flex items-center gap-4">
+          {/* Right Section */}
+          <div className="flex items-center gap-3">
             {user ? (
-              <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
+              <div className="relative">
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-xl hover:bg-white/5 transition-all duration-200 group">
+                  <span className="hidden sm:block text-sm font-medium text-slate-300 group-hover:text-slate-100 transition-colors">{user.name}</span>
+                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-primary to-emerald-deep rounded-lg flex items-center justify-center text-white text-sm font-bold shadow-glow">{user.name.charAt(0).toUpperCase()}</div>
+                  <motion.div animate={{ rotate: profileOpen ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronDown size={14} className="text-slate-500" /></motion.div>
+                </motion.button>
 
-                <Link to="/profile" className="hidden md:block text-right group cursor-pointer">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider group-hover:text-green-500 transition">
-                    ACCOUNT
-                  </p>
-                  <p className="text-sm font-bold text-gray-900 group-hover:text-green-600 transition">
-                    {user.name}
-                  </p>
-                </Link>
-
-                <Link
-                  to="/profile"
-                  className="h-10 w-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition"
-                >
-                  {user.name.charAt(0).toUpperCase()}
-                </Link>
-
-                <button
-                  onClick={handleLogout}
-                  className="ml-2 text-gray-400 hover:text-red-500 transition"
-                  title="Logout"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
+                <AnimatePresence>
+                  {profileOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                      <motion.div initial={{ opacity: 0, y: -8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.95 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} className="absolute right-0 top-full mt-2 w-56 bg-surface border border-glass-light rounded-xl shadow-card overflow-hidden z-50">
+                        <div className="p-3 border-b border-glass-light">
+                          <p className="text-sm font-semibold text-slate-200">{user.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                        </div>
+                        <div className="p-1.5">
+                          {[
+                            { to: "/profile", icon: User, label: "Profile" },
+                            { to: "/orders", icon: BarChart3, label: "My Orders" },
+                          ].map((item, i) => (
+                            <motion.div key={item.to} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                              <Link to={item.to} onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">
+                                <item.icon size={15} /> {item.label}
+                              </Link>
+                            </motion.div>
+                          ))}
+                          <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
+                            <LogOut size={15} /> Log Out
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                <Link to="/login" className="text-gray-600 font-bold hover:text-green-600 transition px-4 py-2">
-                  Log In
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-full font-bold transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  Sign Up
-                </Link>
+              <div className="flex items-center gap-2">
+                <Link to="/login" className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Log In</Link>
+                <motion.div whileHover={{ scale: 1.05, y: -1 }} whileTap={{ scale: 0.95 }}>
+                  <Link to="/register" className="px-5 py-2 bg-emerald-primary hover:bg-emerald-glow text-midnight font-semibold text-sm rounded-lg transition-colors shadow-glow hover:shadow-glow-lg">Sign Up</Link>
+                </motion.div>
               </div>
             )}
-          </div>
 
+            {/* Mobile Toggle */}
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">
+              <AnimatePresence mode="wait">
+                {mobileOpen ? (
+                  <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}><X size={20} /></motion.div>
+                ) : (
+                  <motion.div key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}><Menu size={20} /></motion.div>
+                )}
+              </AnimatePresence>
+            </motion.button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }} className="md:hidden border-t border-glass-light bg-midnight-50/95 backdrop-blur-xl overflow-hidden">
+            <div className="px-4 py-4 space-y-1">
+              {visibleLinks.map((link, i) => (
+                <motion.div key={link.path} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                  <Link to={link.path} onClick={() => setMobileOpen(false)} className={`block px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${isActive(link.path) ? "bg-emerald-primary/10 text-emerald-glow" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}>{link.label}</Link>
+                </motion.div>
+              ))}
+              {user?.role === "admin" && <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-lg text-sm font-semibold text-accent-violet/70 hover:text-accent-violet">🛡️ Admin</Link>}
+              {user && (<>
+                <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-white/5">Profile</Link>
+                <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5">Log Out</button>
+              </>)}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 };

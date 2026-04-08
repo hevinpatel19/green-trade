@@ -44,7 +44,7 @@ export const listEnergy = async (req, res) => {
       sellerCoordinates,
       energyAmount: amount,
       pricePerKwh: price,
-      totalPrice: total,
+      totalAmount: total,
       isSold: false
     });
 

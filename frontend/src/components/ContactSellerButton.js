@@ -1,45 +1,32 @@
 import React, { useState, useContext } from "react";
 import { MessageCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import UserContext from "../context/UserContext";
 import ContactSellerModal from "./ContactSellerModal";
 
-/**
- * ContactSellerButton - Floating button to contact seller
- * Only visible to logged-in users
- * @param {Object} props
- * @param {string} props.sellerEmail - Email of the seller to contact
- */
 const ContactSellerButton = ({ sellerEmail }) => {
     const { user } = useContext(UserContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Don't render if user is not logged in or no seller email
-    if (!user || !sellerEmail) {
-        return null;
-    }
+    if (!user || !sellerEmail) return null;
 
     return (
         <>
-            {/* Floating Button */}
-            <button
+            <motion.button
                 onClick={() => setIsModalOpen(true)}
-                className="fixed bottom-6 right-6 z-40 bg-green-600 hover:bg-green-700 text-white 
-                   px-5 py-3 rounded-full shadow-lg hover:shadow-xl 
-                   transition-all duration-300 transform hover:-translate-y-1 
-                   flex items-center gap-2 font-bold text-sm
-                   focus:outline-none focus:ring-4 focus:ring-green-300"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.5, type: "spring", stiffness: 300 }}
+                whileHover={{ scale: 1.1, y: -4 }}
+                whileTap={{ scale: 0.9 }}
+                className="fixed bottom-6 right-6 z-40 bg-emerald-primary hover:bg-emerald-glow text-midnight px-5 py-3 rounded-xl shadow-glow hover:shadow-glow-lg transition-colors flex items-center gap-2 font-bold text-sm focus:outline-none ripple-btn"
                 aria-label="Contact Seller"
             >
                 <MessageCircle size={18} />
                 <span className="hidden sm:inline">Contact Seller</span>
-            </button>
+            </motion.button>
 
-            {/* Modal */}
-            <ContactSellerModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                sellerEmail={sellerEmail}
-            />
+            <ContactSellerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} sellerEmail={sellerEmail} />
         </>
     );
 };

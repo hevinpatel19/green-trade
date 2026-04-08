@@ -3,27 +3,23 @@ import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { loadStripe } from "@stripe/stripe-js";
-import {
-    Elements,
-    PaymentElement,
-    useStripe,
-    useElements,
-} from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { motion } from "framer-motion";
 import ContactSellerButton from "../components/ContactSellerButton";
 import UserContext from "../context/UserContext";
+import PageTransition from "../components/PageTransition";
+import { ShieldCheck, CreditCard, Zap, ArrowLeft, Lock } from "lucide-react";
 
-// ─── Single loadStripe instance (created once, never duplicated) ───
 let stripePromise = null;
 const getStripe = (key) => {
     if (!stripePromise) {
-        stripePromise = loadStripe(key);
+        stripePromise = loadStripe(key, {
+            betas: [],
+        });
     }
     return stripePromise;
 };
 
-// ────────────────────────────────────────────────────────────────────
-//  Inner form — only renders inside <Elements>, so hooks are safe.
-// ────────────────────────────────────────────────────────────────────
 const PaymentForm = ({ totalAmount, listingId, user, navigate }) => {
     const stripe = useStripe();
     const elements = useElements();
@@ -33,256 +29,122 @@ const PaymentForm = ({ totalAmount, listingId, user, navigate }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!stripe || !elements) return;
-
-        setProcessing(true);
-        setErrorMsg(null);
-
-        const { error, paymentIntent } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-                return_url: `${window.location.origin}/orders`,
-            },
-            redirect: "if_required",
-        });
-
-        if (error) {
-            setErrorMsg(error.message);
-            setProcessing(false);
-            return;
-        }
-
-        // Payment succeeded on Stripe's side — update listing in our DB
+        setProcessing(true); setErrorMsg(null);
+        const { error, paymentIntent } = await stripe.confirmPayment({ elements, confirmParams: { return_url: `${window.location.origin}/orders` }, redirect: "if_required" });
+        if (error) { setErrorMsg(error.message); setProcessing(false); return; }
         if (paymentIntent?.status === "succeeded") {
-            try {
-                await axios.post("http://localhost:5000/api/payment/confirm-order", {
-                    paymentIntentId: paymentIntent.id,
-                    listingId,
-                    buyerEmail: user?.email,
-                    buyerName: user?.name,
-                    totalAmount,
-                });
-                toast.success("Payment successful!");
-            } catch {
-                toast.success("Payment received! Order will update shortly.");
-            }
+            try { await axios.post("http://localhost:5000/api/payment/confirm-order", { paymentIntentId: paymentIntent.id, listingId, buyerEmail: user?.email, buyerName: user?.name, totalAmount }); toast.success("Payment successful!"); } catch { toast.success("Payment received! Order will update shortly."); }
             navigate("/orders");
         }
-
         setProcessing(false);
     };
 
     return (
         <form onSubmit={handleSubmit}>
-            <PaymentElement
-                id="payment-element"
-                options={{ layout: "tabs", paymentMethodOrder: ["card"] }}
-            />
-
+            <PaymentElement id="payment-element" options={{ layout: "tabs", paymentMethodOrder: ["card"] }} />
             {errorMsg && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm font-bold rounded flex items-center gap-2">
-                    ⚠️ {errorMsg}
-                </div>
+                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold rounded-xl flex items-center gap-2">⚠️ {errorMsg}</motion.div>
             )}
-
-            <button
-                type="submit"
-                disabled={processing || !stripe || !elements}
-                className={`w-full mt-6 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${processing
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700 active:scale-95"
-                    }`}
-            >
-                {processing ? "Processing..." : `Pay ₹${totalAmount.toFixed(2)} 💳`}
-            </button>
+            <motion.button type="submit" disabled={processing || !stripe || !elements} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }} className={`w-full mt-6 py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ripple-btn btn-press ${processing ? "bg-midnight-300 text-slate-600 cursor-not-allowed" : "bg-emerald-primary hover:bg-emerald-glow text-midnight shadow-glow hover:shadow-glow-lg"}`}>
+                {processing ? <div className="w-5 h-5 border-2 border-midnight border-t-transparent rounded-full animate-spin" /> : <><CreditCard size={16} /> Pay ₹{totalAmount.toFixed(2)}</>}
+            </motion.button>
         </form>
     );
 };
 
-// ────────────────────────────────────────────────────────────────────
-//  Main page — fetches config + creates intent, then mounts Elements
-//  exactly ONCE (no duplicate providers, no sandbox triggers).
-// ────────────────────────────────────────────────────────────────────
 const CheckoutPage = () => {
     const { user } = useContext(UserContext);
     const location = useLocation();
     const navigate = useNavigate();
     const { item } = location.state || {};
-
     const [stripePk, setStripePk] = useState(null);
     const [clientSecret, setClientSecret] = useState(null);
     const [amountError, setAmountError] = useState(null);
 
-    // ── Calculate total ──
-    const totalAmount = (() => {
-        if (!item) return 0;
-        if (item.isAuction && item.winningTotalAmount) return Number(item.winningTotalAmount);
-        return (Number(item.pricePerKwh) || 0) * (Number(item.energyAmount) || 0);
-    })();
+    const totalAmount = (() => { if (!item) return 0; if (item.isAuction && item.winningTotalAmount) return Number(item.winningTotalAmount); return (Number(item.pricePerKwh) || 0) * (Number(item.energyAmount) || 0); })();
+    const pricePerKwh = item?.isAuction ? (item.winningTotalAmount / item.energyAmount).toFixed(2) : item?.pricePerKwh;
 
-    const pricePerKwh = item?.isAuction
-        ? (item.winningTotalAmount / item.energyAmount).toFixed(2)
-        : item?.pricePerKwh;
-
-    // ── Bootstrap: fetch config + create intent ──
     useEffect(() => {
         if (!item) { navigate("/market"); return; }
-
-        // Auction access control
-        if (item.isAuction) {
-            if (!item.winnerEmail || item.winnerEmail !== user?.email) {
-                toast.error("Unauthorized: You are not the auction winner.");
-                navigate("/market");
-                return;
-            }
-        }
-
-        if (totalAmount < 1) {
-            setAmountError("Minimum payable amount is ₹1.");
-            return;
-        }
-
+        if (item.isAuction && (!item.winnerEmail || item.winnerEmail !== user?.email)) { toast.error("Unauthorized: You are not the auction winner."); navigate("/market"); return; }
+        if (totalAmount < 1) { setAmountError("Minimum payable amount is ₹1."); return; }
         let cancelled = false;
-
         (async () => {
             try {
-                // 1. Get publishable key
-                const { data: cfg } = await axios.get("http://localhost:5000/api/payment/config");
-                if (cancelled) return;
-                setStripePk(cfg.publishableKey);
-
-                // 2. Create PaymentIntent
-                const { data } = await axios.post("http://localhost:5000/api/payment/create-intent", {
-                    amount: totalAmount,
-                    listingId: item._id,
-                });
-                if (cancelled) return;
-                setClientSecret(data.clientSecret);
-            } catch (err) {
-                if (cancelled) return;
-                if (err.response?.data?.code === "AMOUNT_TOO_LOW") {
-                    setAmountError(err.response.data.error);
-                } else {
-                    toast.error(err.response?.data?.error || "Payment gateway error.");
-                }
-            }
+                const { data: cfg } = await axios.get("http://localhost:5000/api/payment/config"); if (cancelled) return; setStripePk(cfg.publishableKey);
+                const { data } = await axios.post("http://localhost:5000/api/payment/create-intent", { amount: totalAmount, listingId: item._id }); if (cancelled) return; setClientSecret(data.clientSecret);
+            } catch (err) { if (cancelled) return; if (err.response?.data?.code === "AMOUNT_TOO_LOW") setAmountError(err.response.data.error); else toast.error(err.response?.data?.error || "Payment gateway error."); }
         })();
-
         return () => { cancelled = true; };
     }, [item, navigate, user, totalAmount]);
 
     if (!item) return null;
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+        <PageTransition>
+            <div className="min-h-screen bg-midnight flex items-center justify-center py-12 px-4">
+                <div className="max-w-5xl w-full">
+                    <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} onClick={() => navigate("/market")} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 font-semibold text-sm mb-6 transition-colors">
+                        <ArrowLeft size={16} /> Back to Market
+                    </motion.button>
 
-                {/* ── LEFT: ORDER SUMMARY ── */}
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-                    <div className="bg-gray-900 text-white p-6">
-                        <h2 className="text-xl font-bold flex items-center gap-2">⚡ Order Summary</h2>
-                        <p className="text-gray-400 text-sm mt-1">
-                            Transaction ID: {item._id.substring(0, 8)}
-                            {item.isAuction && <span className="ml-2 text-purple-400">(Auction Win)</span>}
-                        </p>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* ORDER SUMMARY */}
+                        <motion.div initial={{ opacity: 0, x: -25 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="bg-surface border border-glass-light rounded-2xl overflow-hidden card-hover">
+                            <div className="bg-gradient-to-r from-midnight-200 to-surface-light p-6 border-b border-glass-light">
+                                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2"><Zap size={18} className="text-emerald-primary" /> Order Summary</h2>
+                                <p className="text-slate-500 text-sm mt-1">TX: {item._id.substring(0, 8)}{item.isAuction && <span className="ml-2 text-accent-violet">(Auction Win)</span>}</p>
+                            </div>
+                            <div className="p-8 space-y-5">
+                                <div className="flex justify-between items-center pb-4 border-b border-glass-light">
+                                    <div><p className="font-bold text-slate-200">Energy Bundle</p><p className="text-sm text-slate-500">{item.energyType || "Solar"} Power</p></div>
+                                    <p className="font-bold text-slate-200 text-xl">{item.energyAmount} <span className="text-sm text-slate-500">kWh</span></p>
+                                </div>
+                                <div className="space-y-3 text-sm">
+                                    {[{ l: "Rate per Unit", v: `₹${pricePerKwh}` }, { l: "Energy Amount", v: `${item.energyAmount} kWh` }, { l: "Platform Fee", v: "₹0.00" }, { l: "Taxes", v: "₹0.00" }].map((row, i) => (
+                                        <motion.div key={row.l} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.08 }} className="flex justify-between text-slate-400">
+                                            <span>{row.l}</span><span className="text-slate-300">{row.v}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="pt-5 border-t-2 border-dashed border-glass-light">
+                                    <div className="flex justify-between items-end"><span className="font-bold text-slate-300">Total Due</span><span className="font-black text-3xl text-emerald-glow">₹{totalAmount.toFixed(2)}</span></div>
+                                </motion.div>
+                            </div>
+                            <div className="bg-midnight-100 p-3 text-center text-xs text-slate-600 border-t border-glass-light flex items-center justify-center gap-1.5"><Lock size={12} /> 256-bit SSL Encrypted Transaction</div>
+                        </motion.div>
 
-                    <div className="p-8 space-y-6">
-                        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
-                            <div>
-                                <p className="font-bold text-gray-800 text-lg">Energy Bundle</p>
-                                <p className="text-sm text-gray-500">{item.energyType || "Solar"} Power</p>
+                        {/* PAYMENT */}
+                        <motion.div initial={{ opacity: 0, x: 25 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="flex flex-col justify-center">
+                            <div className="bg-surface border border-glass-light rounded-2xl p-8">
+                                <h3 className="text-xl font-bold text-slate-100 mb-1 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-primary" /> Secure Payment</h3>
+                                <p className="text-slate-500 text-sm mb-6">Complete your purchase securely.</p>
+                                <div className="mb-6 p-3 bg-midnight-100 rounded-xl border border-glass-light"><p className="text-sm text-slate-400"><span className="font-semibold text-slate-300">Buying as:</span> {user?.email}</p></div>
+                                {amountError && (
+                                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+                                        <p className="text-sm text-red-400 font-semibold">⚠️ {amountError}</p>
+                                        <button onClick={() => navigate("/market")} className="mt-3 text-sm text-red-400 hover:text-red-300 underline transition-colors">Return to Market</button>
+                                    </motion.div>
+                                )}
+                                {stripePk && clientSecret && !amountError ? (
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                                        <Elements stripe={getStripe(stripePk)} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#10b981", colorBackground: "#111827", colorText: "#f1f5f9", colorDanger: "#ef4444", borderRadius: "12px", fontFamily: "Inter, system-ui, sans-serif" } } }}>
+                                            <PaymentForm totalAmount={totalAmount} listingId={item._id} user={user} navigate={navigate} />
+                                        </Elements>
+                                    </motion.div>
+                                ) : !amountError ? (
+                                    <div className="flex flex-col items-center justify-center py-10 gap-4">
+                                        <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin" />
+                                        <p className="text-slate-500 font-medium">Securing connection...</p>
+                                    </div>
+                                ) : null}
                             </div>
-                            <div className="text-right">
-                                <p className="font-bold text-gray-800 text-xl">
-                                    {item.energyAmount} <span className="text-sm text-gray-500">kWh</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="flex justify-between text-gray-600">
-                                <span>Rate per Unit</span><span>₹{pricePerKwh}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>Energy Amount</span><span>{item.energyAmount} kWh</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>Platform Fee</span><span>₹0.00</span>
-                            </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>Taxes</span><span>₹0.00</span>
-                            </div>
-                        </div>
-
-                        <div className="pt-6 border-t-2 border-dashed border-gray-200">
-                            <div className="flex justify-between items-end">
-                                <span className="font-bold text-gray-800 text-lg">Total Due</span>
-                                <span className="font-extrabold text-3xl text-green-600">₹{totalAmount.toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 text-center text-xs text-gray-400">
-                        🔒 256-bit SSL Encrypted Transaction
-                    </div>
-                </div>
-
-                {/* ── RIGHT: PAYMENT ── */}
-                <div className="flex flex-col justify-center">
-                    <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-                        <h3 className="text-2xl font-bold text-gray-900 mb-2">Secure Payment</h3>
-                        <p className="text-gray-500 text-sm mb-6">Complete your purchase securely.</p>
-
-                        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                            <p className="text-sm text-blue-800">
-                                <span className="font-bold">Buying as:</span> {user?.email}
-                            </p>
-                        </div>
-
-                        {amountError && (
-                            <div className="mb-6 p-4 bg-red-50 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-700 font-bold">⚠️ {amountError}</p>
-                                <button onClick={() => navigate("/market")} className="mt-3 text-sm text-red-600 underline">
-                                    Return to Market
-                                </button>
-                            </div>
-                        )}
-
-                        {stripePk && clientSecret && !amountError ? (
-                            <Elements
-                                stripe={getStripe(stripePk)}
-                                options={{
-                                    clientSecret,
-                                    appearance: {
-                                        theme: "flat",
-                                        variables: { colorPrimary: "#16a34a" },
-                                    },
-                                    developerTools: {
-                                        assistant: {
-                                            enabled: false,
-                                        },
-                                    },
-                                }}
-                            >
-                                <PaymentForm
-                                    totalAmount={totalAmount}
-                                    listingId={item._id}
-                                    user={user}
-                                    navigate={navigate}
-                                />
-                            </Elements>
-                        ) : !amountError ? (
-                            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600" />
-                                <p className="text-gray-500 font-medium">Securing connection...</p>
-                            </div>
-                        ) : null}
+                        </motion.div>
                     </div>
                 </div>
+                <ContactSellerButton sellerEmail={item?.sellerAddress} />
             </div>
-
-            <ContactSellerButton sellerEmail={item?.sellerAddress} />
-        </div>
+        </PageTransition>
     );
 };
 
