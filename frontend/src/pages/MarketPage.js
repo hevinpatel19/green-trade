@@ -51,7 +51,7 @@ const MarketPage = () => {
         } catch (err) { toast.error("Failed to list: " + (err.response?.data?.message || err.message)); }
     };
 
-    const handleBuyClick = (item) => { if (!user) return toast.error("Please Login First"); navigate("/checkout", { state: { item: { ...item, pricePerKwh: item.dynamicPrice } } }); };
+    const handleBuyClick = (item) => { if (!user) return toast.error("Please Login First"); navigate(`/listing/${item._id}`, { state: { item: { ...item, pricePerKwh: item.dynamicPrice }, marketData } }); };
     const handleBidClick = (item) => { if (!user) return toast.error("Please Login First"); navigate("/auction", { state: { item } }); };
 
     useEffect(() => {
@@ -218,7 +218,7 @@ const MarketPage = () => {
                     ) : (
                         filteredListings.map((item) => (
                             <StaggerItem key={item._id}>
-                                <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 300, damping: 20 }} className="bg-surface border border-glass-light rounded-2xl overflow-hidden card-hover border-glow-animate group">
+                                <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 300, damping: 20 }} onClick={() => handleBuyClick(item)} className="bg-surface border border-glass-light rounded-2xl overflow-hidden card-hover border-glow-animate group cursor-pointer">
                                     <div className={`h-1 ${item.energyType === "Wind" ? "bg-accent-cyan" : "bg-gradient-to-r from-accent-amber to-emerald-primary"}`} />
                                     <div className="p-6">
                                         <div className="flex justify-between items-start mb-4">
@@ -237,7 +237,7 @@ const MarketPage = () => {
                                                 <div className="h-7 w-7 rounded-md bg-midnight-200 flex items-center justify-center text-[10px] font-bold text-slate-400">{item.sellerAddress?.charAt(0).toUpperCase() || "U"}</div>
                                                 <div><p className="text-[10px] text-slate-600">Seller</p><p className="font-semibold text-slate-400 text-xs truncate w-20">{item.sellerAddress}</p></div>
                                             </div>
-                                            <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.95 }} onClick={() => handleBuyClick(item)} className="px-5 py-2 bg-emerald-primary hover:bg-emerald-glow text-midnight font-bold text-sm rounded-lg transition-colors shadow-glow hover:shadow-glow-lg flex items-center gap-1.5 ripple-btn btn-press">
+                                            <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.95 }} onClick={(e) => { e.stopPropagation(); handleBuyClick(item); }} className="px-5 py-2 bg-emerald-primary hover:bg-emerald-glow text-midnight font-bold text-sm rounded-lg transition-colors shadow-glow hover:shadow-glow-lg flex items-center gap-1.5 ripple-btn btn-press">
                                                 <ShoppingCart size={14} /> Buy Now
                                             </motion.button>
                                         </div>

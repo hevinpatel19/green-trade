@@ -21,6 +21,7 @@ import ProfilePage from "./pages/ProfilePage";
 import AuctionPage from "./pages/AuctionPage";
 import AdminPage from "./pages/AdminPage";
 import WalletPage from "./pages/WalletPage";
+import ListingDetailsPage from "./pages/ListingDetailsPage";
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext);
@@ -58,6 +59,7 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/market" element={<MarketPage />} />
+        <Route path="/listing/:id" element={<ListingDetailsPage />} />
 
         {/* Private Routes */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

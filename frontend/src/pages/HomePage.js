@@ -45,7 +45,32 @@ const HomePage = () => {
           <div className="particle particle-3" style={{ bottom: '20%', left: '40%' }} />
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20 md:pt-32 md:pb-28">
-            <div className="text-center max-w-4xl mx-auto">
+            <div className="text-center max-w-4xl mx-auto relative">
+
+              {/* ── Pulsing Glow Orb ── */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-0" aria-hidden="true">
+                {/* Outer bloom — vibrant emerald */}
+                <motion.div
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.25, 0.5, 0.25] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-[360px] h-[360px] md:w-[520px] md:h-[520px] rounded-full blur-[120px] md:blur-[160px]"
+                  style={{ background: "radial-gradient(circle, #10b981 0%, #059669 40%, transparent 70%)" }}
+                />
+                {/* Core glow — bright green */}
+                <motion.div
+                  animate={{ scale: [1.1, 0.9, 1.1], opacity: [0.2, 0.45, 0.2] }}
+                  transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                  className="absolute w-[220px] h-[220px] md:w-[320px] md:h-[320px] rounded-full blur-[90px] md:blur-[120px]"
+                  style={{ background: "radial-gradient(circle, #34d399 0%, #10b981 50%, transparent 75%)" }}
+                />
+                {/* Teal accent ring */}
+                <motion.div
+                  animate={{ scale: [0.95, 1.25, 0.95], opacity: [0.1, 0.3, 0.1] }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+                  className="absolute w-[280px] h-[280px] md:w-[420px] md:h-[420px] rounded-full blur-[100px] md:blur-[140px]"
+                  style={{ background: "radial-gradient(circle, #14b8a6 0%, #0d9488 50%, transparent 75%)" }}
+                />
+              </div>
               {/* Badge */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8, y: 20 }}
