@@ -14,10 +14,11 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import ContactSellerButton from "../components/ContactSellerButton";
 import UserContext from "../context/UserContext";
+import WalletContext from "../context/WalletContext";
 import PageTransition from "../components/PageTransition";
 import {
     ShieldCheck, Zap, ArrowLeft, Lock, Package,
-    CreditCard, CheckCircle2, ArrowRight, User, Mail, MapPin
+    CreditCard, CheckCircle2, ArrowRight, User, Mail, MapPin, Wallet
 } from "lucide-react";
 
 /* ── Stripe singleton ── */
@@ -431,12 +432,16 @@ const PaymentForm = ({ totalAmount, listingId, user, navigate, clientSecret }) =
    ═══════════════════════════════════════════════════ */
 const CheckoutPage = () => {
     const { user } = useContext(UserContext);
+    const { balance, fetchBalance } = useContext(WalletContext);
     const location = useLocation();
     const navigate = useNavigate();
     const { item } = location.state || {};
     const [stripePk, setStripePk] = useState(null);
     const [clientSecret, setClientSecret] = useState(null);
     const [amountError, setAmountError] = useState(null);
+    const [paymentMethod, setPaymentMethod] = useState("card");
+    const [walletProcessing, setWalletProcessing] = useState(false);
+    const [walletError, setWalletError] = useState(null);
 
     const totalAmount = useMemo(() => {
         if (!item) return 0;
@@ -561,7 +566,7 @@ const CheckoutPage = () => {
                                     </div>
                                 </motion.div>
 
-                                {/* PAYMENT — fully static, split card elements */}
+                                {/* PAYMENT — method selection + form */}
                                 <motion.div
                                     initial={{ opacity: 0, y: 15 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -594,30 +599,218 @@ const CheckoutPage = () => {
                                         </div>
                                     )}
 
-                                    {/* Split card elements — NO PaymentElement, NO dynamic fields */}
-                                    {stripePk && clientSecret && !amountError ? (
-                                        <Elements
-                                            stripe={getStripe(stripePk)}
-                                            options={{
-                                                fonts: [
-                                                    { cssSrc: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
-                                                ],
-                                            }}
-                                        >
-                                            <PaymentForm
-                                                totalAmount={totalAmount}
-                                                listingId={item._id}
-                                                user={user}
-                                                navigate={navigate}
-                                                clientSecret={clientSecret}
-                                            />
-                                        </Elements>
-                                    ) : !amountError ? (
-                                        <div className="flex items-center justify-center py-14 gap-4">
-                                            <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin" />
-                                            <p className="text-slate-400 text-sm font-medium">Connecting to payment gateway…</p>
+                                    {/* ═══ PAYMENT METHOD SELECTION ═══ */}
+                                    {!amountError && (
+                                        <div className="mb-5">
+                                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Select Payment Method</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {/* Wallet Option */}
+                                                <label
+                                                    className={`relative flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                                                        paymentMethod === "wallet"
+                                                            ? "bg-emerald-primary/5 border-emerald-primary/40 shadow-glow"
+                                                            : "bg-midnight-100 border-glass-light hover:border-white/15"
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name="paymentMethod"
+                                                        value="wallet"
+                                                        checked={paymentMethod === "wallet"}
+                                                        onChange={() => { setPaymentMethod("wallet"); setWalletError(null); }}
+                                                        className="sr-only"
+                                                    />
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                                        paymentMethod === "wallet"
+                                                            ? "border-emerald-primary"
+                                                            : "border-slate-600"
+                                                    }`}>
+                                                        {paymentMethod === "wallet" && (
+                                                            <motion.div
+                                                                initial={{ scale: 0 }}
+                                                                animate={{ scale: 1 }}
+                                                                className="w-2.5 h-2.5 rounded-full bg-emerald-primary"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <Wallet size={15} className={paymentMethod === "wallet" ? "text-emerald-glow" : "text-slate-500"} />
+                                                            <span className={`text-sm font-bold ${paymentMethod === "wallet" ? "text-slate-100" : "text-slate-400"}`}>Wallet Balance</span>
+                                                        </div>
+                                                        <p className={`text-xs mt-0.5 font-semibold ${balance >= totalAmount ? "text-emerald-glow" : "text-red-400"}`}>
+                                                            ₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                                            {balance < totalAmount && " (Insufficient)"}
+                                                        </p>
+                                                    </div>
+                                                </label>
+
+                                                {/* Card Option */}
+                                                <label
+                                                    className={`relative flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                                                        paymentMethod === "card"
+                                                            ? "bg-emerald-primary/5 border-emerald-primary/40 shadow-glow"
+                                                            : "bg-midnight-100 border-glass-light hover:border-white/15"
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name="paymentMethod"
+                                                        value="card"
+                                                        checked={paymentMethod === "card"}
+                                                        onChange={() => { setPaymentMethod("card"); setWalletError(null); }}
+                                                        className="sr-only"
+                                                    />
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                                        paymentMethod === "card"
+                                                            ? "border-emerald-primary"
+                                                            : "border-slate-600"
+                                                    }`}>
+                                                        {paymentMethod === "card" && (
+                                                            <motion.div
+                                                                initial={{ scale: 0 }}
+                                                                animate={{ scale: 1 }}
+                                                                className="w-2.5 h-2.5 rounded-full bg-emerald-primary"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <CreditCard size={15} className={paymentMethod === "card" ? "text-emerald-glow" : "text-slate-500"} />
+                                                            <span className={`text-sm font-bold ${paymentMethod === "card" ? "text-slate-100" : "text-slate-400"}`}>Card (Stripe)</span>
+                                                        </div>
+                                                        <p className="text-xs mt-0.5 text-slate-500">Visa, Mastercard, etc.</p>
+                                                    </div>
+                                                </label>
+                                            </div>
                                         </div>
-                                    ) : null}
+                                    )}
+
+                                    {/* ═══ WALLET PAYMENT ═══ */}
+                                    {paymentMethod === "wallet" && !amountError && (
+                                        <div>
+                                            {walletError && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -4 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2"
+                                                >
+                                                    <span className="text-red-400 text-sm font-semibold">⚠️ {walletError}</span>
+                                                </motion.div>
+                                            )}
+
+                                            <div className="p-4 bg-midnight-100 rounded-xl border border-glass-light mb-4">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-sm text-slate-400">Wallet Balance</span>
+                                                    <span className="text-sm font-bold text-emerald-glow">₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-sm text-slate-400">Order Amount</span>
+                                                    <span className="text-sm font-bold text-slate-200">−₹{totalAmount.toFixed(2)}</span>
+                                                </div>
+                                                <div className="border-t border-glass-light pt-2 flex justify-between items-center">
+                                                    <span className="text-sm font-semibold text-slate-400">Remaining</span>
+                                                    <span className={`text-sm font-bold ${(balance - totalAmount) >= 0 ? "text-emerald-glow" : "text-red-400"}`}>
+                                                        ₹{(balance - totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <motion.button
+                                                onClick={async () => {
+                                                    if (balance < totalAmount) {
+                                                        setWalletError(`Insufficient balance. You need ₹${(totalAmount - balance).toFixed(2)} more. Add funds to your wallet.`);
+                                                        return;
+                                                    }
+                                                    setWalletProcessing(true);
+                                                    setWalletError(null);
+                                                    try {
+                                                        await axios.post(
+                                                            "http://localhost:5000/api/payment/confirm-wallet-order",
+                                                            {
+                                                                listingId: item._id,
+                                                                buyerEmail: user?.email,
+                                                                buyerName: user?.name,
+                                                                totalAmount,
+                                                            },
+                                                            { headers: { Authorization: `Bearer ${user.token}` } }
+                                                        );
+                                                        toast.success("Payment successful!");
+                                                        fetchBalance();
+                                                        navigate("/orders");
+                                                    } catch (err) {
+                                                        const errMsg = err.response?.data?.error || "Payment failed.";
+                                                        if (err.response?.data?.code === "INSUFFICIENT_BALANCE") {
+                                                            setWalletError(`Insufficient balance. Current balance: ₹${err.response.data.balance}`);
+                                                        } else {
+                                                            setWalletError(errMsg);
+                                                        }
+                                                    } finally {
+                                                        setWalletProcessing(false);
+                                                    }
+                                                }}
+                                                disabled={walletProcessing || balance < totalAmount}
+                                                whileHover={!walletProcessing && balance >= totalAmount ? { scale: 1.01, y: -1 } : {}}
+                                                whileTap={!walletProcessing && balance >= totalAmount ? { scale: 0.98 } : {}}
+                                                className={`
+                                                    w-full py-4 rounded-xl font-bold text-base
+                                                    transition-all duration-300 flex items-center justify-center gap-3
+                                                    ripple-btn btn-press
+                                                    ${walletProcessing || balance < totalAmount
+                                                        ? "bg-midnight-300 text-slate-600 cursor-not-allowed"
+                                                        : "bg-gradient-to-r from-emerald-primary to-emerald-glow text-midnight shadow-glow hover:shadow-glow-lg"
+                                                    }
+                                                `}
+                                            >
+                                                {walletProcessing ? (
+                                                    <>
+                                                        <div className="w-5 h-5 border-2 border-midnight border-t-transparent rounded-full animate-spin" />
+                                                        <span>Processing…</span>
+                                                    </>
+                                                ) : balance < totalAmount ? (
+                                                    <>
+                                                        <Wallet size={16} />
+                                                        <span>Insufficient Balance</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Wallet size={16} />
+                                                        <span>Pay with Wallet — ₹{totalAmount.toFixed(2)}</span>
+                                                        <ArrowRight size={16} />
+                                                    </>
+                                                )}
+                                            </motion.button>
+                                        </div>
+                                    )}
+
+                                    {/* ═══ CARD PAYMENT (existing Stripe flow) ═══ */}
+                                    {paymentMethod === "card" && (
+                                        <>
+                                            {stripePk && clientSecret && !amountError ? (
+                                                <Elements
+                                                    stripe={getStripe(stripePk)}
+                                                    options={{
+                                                        fonts: [
+                                                            { cssSrc: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
+                                                        ],
+                                                    }}
+                                                >
+                                                    <PaymentForm
+                                                        totalAmount={totalAmount}
+                                                        listingId={item._id}
+                                                        user={user}
+                                                        navigate={navigate}
+                                                        clientSecret={clientSecret}
+                                                    />
+                                                </Elements>
+                                            ) : !amountError ? (
+                                                <div className="flex items-center justify-center py-14 gap-4">
+                                                    <div className="w-10 h-10 border-2 border-emerald-primary border-t-transparent rounded-full animate-spin" />
+                                                    <p className="text-slate-400 text-sm font-medium">Connecting to payment gateway…</p>
+                                                </div>
+                                            ) : null}
+                                        </>
+                                    )}
                                 </motion.div>
                             </div>
 

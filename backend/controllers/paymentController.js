@@ -98,3 +98,78 @@ export const confirmOrder = async (req, res) => {
         res.status(500).json({ error: "Failed to confirm order." });
     }
 };
+
+/**
+ * POST /api/payment/confirm-wallet-order
+ * Called when user pays for a listing using wallet balance.
+ * Deducts from wallet and updates the listing record.
+ * Body: { listingId, buyerEmail, buyerName, totalAmount }
+ * Requires: protect middleware (req.user available)
+ */
+export const confirmWalletOrder = async (req, res) => {
+    try {
+        const { listingId, buyerEmail, buyerName, totalAmount } = req.body;
+
+        if (!listingId || !totalAmount) {
+            return res.status(400).json({ error: "listingId and totalAmount are required." });
+        }
+
+        const numericAmount = Number(totalAmount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({ error: "Invalid amount." });
+        }
+
+        const listing = await EnergyListing.findById(listingId);
+        if (!listing) return res.status(404).json({ error: "Listing not found." });
+
+        // Idempotency — skip if already completed
+        if (listing.isSold && listing.paymentStatus === "paid") {
+            return res.json({ success: true, message: "Already processed." });
+        }
+
+        // Deduct from wallet
+        const Wallet = (await import("../models/Wallet.js")).default;
+        const wallet = await Wallet.findOne({ userId: req.user._id });
+
+        if (!wallet || wallet.balance < numericAmount) {
+            return res.status(400).json({
+                error: "Insufficient wallet balance.",
+                code: "INSUFFICIENT_BALANCE",
+                balance: wallet ? wallet.balance : 0,
+            });
+        }
+
+        wallet.balance -= numericAmount;
+        wallet.transactions.push({
+            type: "debit",
+            amount: numericAmount,
+            description: `Energy purchase — Listing ${listingId}`,
+            referenceId: listingId,
+        });
+        await wallet.save();
+
+        // Update listing (same as confirmOrder)
+        listing.isSold = true;
+        listing.buyerAddress = buyerEmail;
+        listing.buyerName = buyerName || null;
+        listing.paymentStatus = "paid";
+        listing.status = "completed";
+        listing.paymentIntentId = `wallet_${req.user._id}_${Date.now()}`;
+        listing.transactionId = listing.paymentIntentId;
+        listing.totalAmount = numericAmount;
+        listing.completedAt = new Date();
+
+        await listing.save();
+
+        console.log(`✅ Wallet order confirmed: ₹${numericAmount} for listing ${listingId}`);
+
+        res.json({
+            success: true,
+            message: "Order confirmed via wallet.",
+            balance: wallet.balance,
+        });
+    } catch (err) {
+        console.error("❌ Confirm Wallet Order Error:", err.message);
+        res.status(500).json({ error: "Failed to confirm wallet order." });
+    }
+};

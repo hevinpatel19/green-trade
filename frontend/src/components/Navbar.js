@@ -2,10 +2,12 @@ import React, { useContext, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import UserContext from "../context/UserContext";
-import { Menu, X, LogOut, ChevronDown, Shield, LayoutDashboard, ShoppingCart, BarChart3, User } from "lucide-react";
+import WalletContext from "../context/WalletContext";
+import { Menu, X, LogOut, ChevronDown, Shield, LayoutDashboard, ShoppingCart, BarChart3, User, Wallet } from "lucide-react";
 
 const Navbar = () => {
   const { user, logout } = useContext(UserContext);
+  const { balance } = useContext(WalletContext);
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -25,17 +27,17 @@ const Navbar = () => {
   return (
     <nav className="sticky top-0 z-50 bg-midnight-50/80 backdrop-blur-xl border-b border-glass-light">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
+        <div className="flex justify-between h-16 items-center relative">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
+          <Link to="/" className="flex items-center gap-2.5 group flex-shrink-0" onClick={() => setMobileOpen(false)}>
             <motion.div whileHover={{ rotate: 15, scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-9 h-9 bg-gradient-to-br from-emerald-primary to-emerald-glow rounded-lg flex items-center justify-center shadow-glow group-hover:shadow-glow-lg transition-shadow">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
             </motion.div>
             <span className="text-lg font-bold text-slate-100 tracking-tight">Green<span className="text-emerald-primary">Trade</span></span>
           </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Desktop Nav — absolutely centered */}
+          <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {visibleLinks.map((link) => (
               <motion.div key={link.path} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}>
                 <Link to={link.path} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${isActive(link.path) ? "bg-emerald-primary/10 text-emerald-glow" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}>
@@ -52,8 +54,26 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-3">
+          {/* Right Section — Wallet + Profile */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Wallet Button (Desktop) */}
+            {user && (
+              <div className="hidden md:flex items-center">
+                <motion.div whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}>
+                  <Link
+                    to="/wallet"
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 border ${
+                      isActive("/wallet")
+                        ? "bg-emerald-primary/10 border-emerald-primary/30 text-emerald-glow shadow-glow"
+                        : "border-glass-light text-slate-400 hover:text-slate-200 hover:bg-white/5 hover:border-white/15"
+                    }`}
+                  >
+                    <Wallet size={15} />
+                    <span className="font-bold">₹{balance.toLocaleString("en-IN")}</span>
+                  </Link>
+                </motion.div>
+              </div>
+            )}
             {user ? (
               <div className="relative">
                 <motion.button whileTap={{ scale: 0.97 }} onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-xl hover:bg-white/5 transition-all duration-200 group">
@@ -126,6 +146,10 @@ const Navbar = () => {
               ))}
               {user?.role === "admin" && <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-lg text-sm font-semibold text-accent-violet/70 hover:text-accent-violet">🛡️ Admin</Link>}
               {user && (<>
+                <Link to="/wallet" onClick={() => setMobileOpen(false)} className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${isActive("/wallet") ? "bg-emerald-primary/10 text-emerald-glow" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}>
+                  <span className="flex items-center gap-2"><Wallet size={15} /> Wallet</span>
+                  <span className="font-bold text-emerald-glow">₹{balance.toLocaleString("en-IN")}</span>
+                </Link>
                 <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-white/5">Profile</Link>
                 <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5">Log Out</button>
               </>)}

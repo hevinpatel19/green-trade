@@ -12,6 +12,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import marketRoutes from "./routes/marketRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import walletRoutes from "./routes/walletRoutes.js";
 
 // Import auction auto-close logic
 import { closeExpiredAuctions } from "./controllers/marketController.js";
@@ -34,6 +35,7 @@ app.use("/api/market", marketRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/wallet", walletRoutes);
 
 // Database Connection
 mongoose

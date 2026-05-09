@@ -4,6 +4,7 @@ import { AnimatePresence } from "framer-motion";
 
 // Context
 import UserContext, { UserProvider } from "./context/UserContext";
+import { WalletProvider } from "./context/WalletContext";
 
 // Components
 import Navbar from "./components/Navbar";
@@ -19,6 +20,7 @@ import OrderPage from "./pages/OrderPage";
 import ProfilePage from "./pages/ProfilePage";
 import AuctionPage from "./pages/AuctionPage";
 import AdminPage from "./pages/AdminPage";
+import WalletPage from "./pages/WalletPage";
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(UserContext);
@@ -62,6 +64,7 @@ const AnimatedRoutes = () => {
         <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
         <Route path="/orders" element={<PrivateRoute><OrderPage /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+        <Route path="/wallet" element={<PrivateRoute><WalletPage /></PrivateRoute>} />
         <Route path="/auction" element={<PrivateRoute><AuctionPage /></PrivateRoute>} />
 
         {/* Admin Route */}
@@ -75,12 +78,14 @@ function App() {
   return (
     <Router>
       <UserProvider>
-        <div className="min-h-screen bg-midnight font-sans text-slate-100">
-          <Navbar />
-          <main>
-            <AnimatedRoutes />
-          </main>
-        </div>
+        <WalletProvider>
+          <div className="min-h-screen bg-midnight font-sans text-slate-100">
+            <Navbar />
+            <main>
+              <AnimatedRoutes />
+            </main>
+          </div>
+        </WalletProvider>
       </UserProvider>
     </Router>
   );
