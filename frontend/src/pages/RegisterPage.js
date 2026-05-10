@@ -5,6 +5,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import { User, Mail, Phone, Lock, ArrowRight, Zap } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", phoneNumber: "" });
@@ -30,7 +31,7 @@ const RegisterPage = () => {
     if (phoneValidationError) { setPhoneError(phoneValidationError); return; }
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", formData);
+      const res = await axios.post(`${API_URL}/api/auth/register`, formData);
       toast.success("Registration Successful! Please Login.");
       navigate("/login");
     } catch (error) {

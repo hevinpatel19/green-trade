@@ -8,6 +8,7 @@ import PageTransition from "../components/PageTransition";
 import ScrollReveal, { StaggerContainer, StaggerItem } from "../components/ScrollReveal";
 import AnimatedCounter from "../components/AnimatedCounter";
 import { Shield, Zap, Users, BarChart3, Battery, DollarSign, Search, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const AdminPage = () => {
     const { user, loading: authLoading } = useContext(UserContext);
@@ -31,11 +32,11 @@ const AdminPage = () => {
 
     useEffect(() => { if (user?.role === "admin" && user?.token) fetchStats(); }, [user]);
 
-    const fetchStats = async () => { try { const res = await axios.get("http://localhost:5000/api/admin/stats", { headers: { Authorization: `Bearer ${user.token}` } }); setStats(res.data); } catch (err) { console.error(err); } };
+    const fetchStats = async () => { try { const res = await axios.get(`${API_URL}/api/admin/stats`, { headers: { Authorization: `Bearer ${user.token}` } }); setStats(res.data); } catch (err) { console.error(err); } };
 
     const fetchTrades = async () => {
         if (!user?.token) return; setLoading(true); setError(null);
-        try { const res = await axios.get("http://localhost:5000/api/admin/trades", { headers: { Authorization: `Bearer ${user.token}` } }); setTrades(res.data); }
+        try { const res = await axios.get(`${API_URL}/api/admin/trades`, { headers: { Authorization: `Bearer ${user.token}` } }); setTrades(res.data); }
         catch (err) { setError(err.response?.data?.message || "Failed to fetch trades"); toast.error("Failed to fetch trades"); }
         finally { setLoading(false); }
     };

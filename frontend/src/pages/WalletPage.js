@@ -20,6 +20,7 @@ import {
     CreditCard, CheckCircle2, IndianRupee, TrendingUp,
     ShieldCheck, Lock, Zap, ArrowLeft
 } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 /* ── Stripe singleton ── */
 let stripePromise = null;
@@ -116,7 +117,7 @@ const AddFundsForm = ({ amount, user, clientSecret, onSuccess }) => {
         if (paymentIntent?.status === "succeeded") {
             try {
                 const { data } = await axios.post(
-                    "http://localhost:5000/api/wallet/confirm-funds",
+                    `${API_URL}/api/wallet/confirm-funds`,
                     { paymentIntentId: paymentIntent.id, amount },
                     { headers: { Authorization: `Bearer ${user.token}` } }
                 );
@@ -238,11 +239,11 @@ const WalletPage = () => {
 
         setInitiating(true);
         try {
-            const { data: cfg } = await axios.get("http://localhost:5000/api/payment/config");
+            const { data: cfg } = await axios.get(`${API_URL}/api/payment/config`);
             setStripePk(cfg.publishableKey);
 
             const { data } = await axios.post(
-                "http://localhost:5000/api/wallet/add-funds",
+                `${API_URL}/api/wallet/add-funds`,
                 { amount },
                 { headers: { Authorization: `Bearer ${user.token}` } }
             );

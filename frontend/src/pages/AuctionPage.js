@@ -7,6 +7,7 @@ import UserContext from "../context/UserContext";
 import PageTransition from "../components/PageTransition";
 import ContactSellerButton from "../components/ContactSellerButton";
 import { ArrowLeft, Timer, Gavel, Crown, Trophy, CreditCard, TrendingUp } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const AuctionPage = () => {
     const { user } = useContext(UserContext);
@@ -22,7 +23,7 @@ const AuctionPage = () => {
     useEffect(() => {
         if (!item) { navigate("/market"); return; }
         const fetchLatestListing = async () => {
-            try { const res = await axios.get(`http://localhost:5000/api/market/auctions`); const latestItem = res.data.find(l => l._id === item._id); if (latestItem) setListing(latestItem); } catch (err) { console.error(err); }
+            try { const res = await axios.get(`${API_URL}/api/market/auctions`); const latestItem = res.data.find(l => l._id === item._id); if (latestItem) setListing(latestItem); } catch (err) { console.error(err); }
             setFetchingLatest(false);
         };
         fetchLatestListing();
@@ -43,7 +44,7 @@ const AuctionPage = () => {
         const currentHighest = listing.highestBid > 0 ? listing.highestBid : listing.pricePerKwh;
         if (Number(bidAmount) <= currentHighest) { toast.error(`Bid must be higher than ₹${currentHighest}`); setLoading(false); return; }
         try {
-            const res = await axios.post(`http://localhost:5000/api/market/bid/${listing._id}`, { bidderEmail: user.email, bidAmount: Number(bidAmount) });
+            const res = await axios.post(`${API_URL}/api/market/bid/${listing._id}`, { bidderEmail: user.email, bidAmount: Number(bidAmount) });
             if (res.data.success) { toast.success("Bid Placed Successfully!"); setListing({ ...listing, highestBid: res.data.newHighest, bids: [...(listing.bids || []), { bidderEmail: user.email, amount: Number(bidAmount), timestamp: new Date().toISOString() }] }); setBidAmount(""); }
         } catch (err) { toast.error(err.response?.data?.message || "Bidding Failed"); }
         setLoading(false);

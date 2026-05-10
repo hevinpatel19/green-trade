@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, Mail, X, User, Loader2 } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const ContactSellerModal = ({ isOpen, onClose, sellerEmail }) => {
     const [seller, setSeller] = useState(null);
@@ -12,7 +13,7 @@ const ContactSellerModal = ({ isOpen, onClose, sellerEmail }) => {
 
     const fetchSellerInfo = async () => {
         setLoading(true); setError(null);
-        try { const res = await axios.get(`http://localhost:5000/api/users/seller/${encodeURIComponent(sellerEmail)}`); setSeller(res.data); }
+        try { const res = await axios.get(`${API_URL}/api/users/seller/${encodeURIComponent(sellerEmail)}`); setSeller(res.data); }
         catch (err) { console.error(err); setError("Unable to load seller contact info"); }
         setLoading(false);
     };

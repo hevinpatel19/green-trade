@@ -5,6 +5,7 @@ import PageTransition from "../components/PageTransition";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { User, Mail, Phone, MapPin, Edit3, Save, X, ShieldCheck } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const ProfilePage = () => {
     const { user, updateUser } = useContext(UserContext);
@@ -21,7 +22,7 @@ const ProfilePage = () => {
     const handleUpdateProfile = async (e) => {
         e.preventDefault(); setLoading(true);
         try {
-            const res = await axios.put("http://localhost:5000/api/auth/profile", { id: user._id, name: formData.name, email: formData.email, address: formData.address, token: user.token });
+            const res = await axios.put(`${API_URL}/api/auth/profile`, { id: user._id, name: formData.name, email: formData.email, address: formData.address, token: user.token });
             updateUser(res.data); setIsEditing(false); toast.success("Profile Updated Successfully!");
         } catch (error) { toast.error(error.response?.data?.message || "Update Failed"); }
         setLoading(false);

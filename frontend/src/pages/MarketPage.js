@@ -7,6 +7,7 @@ import UserContext from "../context/UserContext";
 import PageTransition from "../components/PageTransition";
 import ScrollReveal, { StaggerContainer, StaggerItem } from "../components/ScrollReveal";
 import { MapPin, Plus, X, TrendingUp, Brain, Zap, Timer, Gavel, ShoppingCart } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const MarketPage = () => {
     const { user } = useContext(UserContext);
@@ -30,7 +31,7 @@ const MarketPage = () => {
         const fetchDynamicFeed = async () => {
             setLoading(true);
             try {
-                const { data } = await axios.get(`http://localhost:5000/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`);
+                const { data } = await axios.get(`${API_URL}/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`);
                 if (cancelled) return;
                 setListings(data.listings); setAuctions(data.auctions || []); setMarketData(data.market);
             } catch (err) { if (!cancelled && err.response?.status !== 403) toast.error("Failed to fetch market data."); }
@@ -44,9 +45,9 @@ const MarketPage = () => {
         e.preventDefault();
         if (!user) return toast.error("Please Login to Sell");
         try {
-            await axios.post("http://localhost:5000/api/market/list", { sellerAddress: user.email, energyAmount: formData.amount, pricePerKwh: formData.price, isAuction: formData.isAuction, durationHours: formData.duration, energyType: formData.energyType });
+            await axios.post(`${API_URL}/api/market/list`, { sellerAddress: user.email, energyAmount: formData.amount, pricePerKwh: formData.price, isAuction: formData.isAuction, durationHours: formData.duration, energyType: formData.energyType });
             toast.success("Listed Successfully!"); setShowForm(false); setListings([]); setAuctions([]); setLoading(true);
-            const { data } = await axios.get(`http://localhost:5000/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`);
+            const { data } = await axios.get(`${API_URL}/api/market/dynamic-feed?buyerEmail=${encodeURIComponent(user.email)}`);
             setListings(data.listings); setAuctions(data.auctions || []); setMarketData(data.market); setLoading(false);
         } catch (err) { toast.error("Failed to list: " + (err.response?.data?.message || err.message)); }
     };

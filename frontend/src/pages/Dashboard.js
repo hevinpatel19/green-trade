@@ -7,6 +7,7 @@ import PageTransition from "../components/PageTransition";
 import ScrollReveal from "../components/ScrollReveal";
 import { MapPin, Sun, RefreshCw, Zap, Trash2, Gavel, TrendingUp, Battery, BatteryWarning, Info } from "lucide-react";
 import { WEATHER_API_KEY } from "../utils/weatherUtils";
+import { API_URL, ML_URL } from "../utils/api";
 
 const formatTimeWithOffset = (unixTimestamp, timezoneOffsetSeconds) => {
   const utcMs = unixTimestamp * 1000;
@@ -39,7 +40,7 @@ const Dashboard = () => {
   }, [user?.address?.city, user?.address?.state, user?.address?.country]);
 
   const fetchListings = async () => {
-    try { const res = await axios.get(`http://localhost:5000/api/market/mylistings/${user.email}`); setMyListings(res.data); } catch (e) { console.error(e); }
+    try { const res = await axios.get(`${API_URL}/api/market/mylistings/${user.email}`); setMyListings(res.data); } catch (e) { console.error(e); }
   };
 
   const runAutoForecast = async () => {
@@ -62,7 +63,7 @@ const Dashboard = () => {
       const d = weatherRes.data;
       setWeatherData({ location: displayLoc || d.name + ", " + d.sys.country, temp: d.main.temp, feels_like: d.main.feels_like, clouds: d.clouds.all, humidity: d.main.humidity, sunrise: formatTimeWithOffset(d.sys.sunrise, d.timezone), sunset: formatTimeWithOffset(d.sys.sunset, d.timezone) });
       const forecastPoints = forecastRes.data.list.map((i) => ({ dt: i.dt, temp: i.main.temp, humidity: i.main.humidity, clouds: i.clouds.all }));
-      const aiRes = await axios.post("http://localhost:5001/predict-energy-forecast", { forecast: forecastPoints, sunrise: d.sys.sunrise, sunset: d.sys.sunset, timezone_offset: d.timezone, expected_consumption_24h: parseFloat(consumption), solar_capacity_kw: parseFloat(solarCapacity) || 1.0 });
+      const aiRes = await axios.post(`${ML_URL}/predict-energy-forecast`, { forecast: forecastPoints, sunrise: d.sys.sunrise, sunset: d.sys.sunset, timezone_offset: d.timezone, expected_consumption_24h: parseFloat(consumption), solar_capacity_kw: parseFloat(solarCapacity) || 1.0 });
       setPredictionData({ generated: aiRes.data.total_generated, consumed: aiRes.data.user_consumption, net: aiRes.data.net_energy });
       setSellAmount(aiRes.data.net_energy > 0 ? aiRes.data.net_energy : "");
       setAdvisorTip(aiRes.data.advisor);
@@ -75,7 +76,7 @@ const Dashboard = () => {
     if (!predictionData || !basePrice || !sellAmount) return;
     if (parseFloat(sellAmount) > predictionData.net) return toast.error(`Maximum excess available is ${predictionData.net} kWh`);
     try {
-      await axios.post("http://localhost:5000/api/market/list", { sellerAddress: user.email, energyAmount: parseFloat(sellAmount), pricePerKwh: parseFloat(basePrice), energyType: "Solar", source: "AI Prediction", isAuction, durationHours: isAuction ? auctionDuration : null });
+      await axios.post(`${API_URL}/api/market/list`, { sellerAddress: user.email, energyAmount: parseFloat(sellAmount), pricePerKwh: parseFloat(basePrice), energyType: "Solar", source: "AI Prediction", isAuction, durationHours: isAuction ? auctionDuration : null });
       toast.success("Listed Successfully!");
       fetchListings();
     } catch (e) { toast.error("Listing error"); }
@@ -83,7 +84,7 @@ const Dashboard = () => {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete listing?")) return;
-    try { await axios.delete("http://localhost:5000/api/market/" + id); setMyListings((prev) => prev.filter((i) => i._id !== id)); } catch (e) { toast.error("Delete failed"); }
+    try { await axios.delete(`${API_URL}/api/market/` + id); setMyListings((prev) => prev.filter((i) => i._id !== id)); } catch (e) { toast.error("Delete failed"); }
   };
 
   if (!hasCompleteAddress) {

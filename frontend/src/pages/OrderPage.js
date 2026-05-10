@@ -7,6 +7,7 @@ import PageTransition from "../components/PageTransition";
 import ScrollReveal, { StaggerContainer, StaggerItem } from "../components/ScrollReveal";
 import AnimatedCounter from "../components/AnimatedCounter";
 import { Zap, Wind, TrendingUp, ShoppingCart, BarChart3, DollarSign } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const OrderPage = () => {
   const { user } = useContext(UserContext);
@@ -19,7 +20,7 @@ const OrderPage = () => {
 
   const fetchOrders = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/orders/myorders/${encodeURIComponent(user.email)}`);
+      const res = await axios.get(`${API_URL}/api/orders/myorders/${encodeURIComponent(user.email)}`);
       setOrders(res.data); calculateAIStats(res.data); setLoading(false);
     } catch (error) { console.error(error); setLoading(false); }
   };

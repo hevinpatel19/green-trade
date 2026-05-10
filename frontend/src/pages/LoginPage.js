@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import UserContext from "../context/UserContext";
 import PageTransition from "../components/PageTransition";
 import { Mail, Lock, ArrowRight, Zap } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const LoginPage = () => {
   const { login } = useContext(UserContext);
@@ -20,7 +21,7 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", formData);
+      const res = await axios.post(`${API_URL}/api/auth/login`, formData);
       toast.success(`Welcome back, ${res.data.name}!`);
       login(res.data);
     } catch (error) {

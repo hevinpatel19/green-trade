@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useContext, useCallback } from "react";
 import axios from "axios";
 import UserContext from "./UserContext";
+import { API_URL } from "../utils/api";
 
 const WalletContext = createContext();
 
@@ -19,7 +20,7 @@ export const WalletProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      const { data } = await axios.get("http://localhost:5000/api/wallet/balance", {
+      const { data } = await axios.get(`${API_URL}/api/wallet/balance`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
       setBalance(data.balance);

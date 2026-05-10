@@ -7,6 +7,7 @@ import PageTransition from "../components/PageTransition";
 import ScrollReveal, { StaggerContainer, StaggerItem } from "../components/ScrollReveal";
 import AnimatedCounter from "../components/AnimatedCounter";
 import { Zap, Brain, Shield, ArrowRight, TrendingUp, Users, Activity } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 const HomePage = () => {
   const { user } = useContext(UserContext);
@@ -16,7 +17,7 @@ const HomePage = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/market/stats");
+        const res = await axios.get(`${API_URL}/api/market/stats`);
         setStats(res.data);
       } catch (error) {
         console.error("Error fetching stats:", error);

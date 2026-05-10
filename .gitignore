@@ -6,12 +6,20 @@ yarn-error.log*
 # Environment files
 .env
 .env.*
+!frontend/.env.development
+!frontend/.env.production
 
 # Python
 __pycache__/
 *.pyc
 venv/
 .venv/
+
+# ML Models (too large for Git - use Git LFS or upload separately)
+# *.pkl
+
+# Build output
+dist/
 
 # OS
 .DS_Store

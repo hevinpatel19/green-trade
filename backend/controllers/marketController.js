@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
-const ML_SERVICE_URL = "http://localhost:5001";
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:5001";
 
 // ── Selling radius (km) — configurable ONLY here in code ──
 const SELLING_RADIUS_KM = 50;

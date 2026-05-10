@@ -20,6 +20,7 @@ import {
     ShieldCheck, Zap, ArrowLeft, Lock, Package,
     CreditCard, CheckCircle2, ArrowRight, User, Mail, MapPin, Wallet
 } from "lucide-react";
+import { API_URL } from "../utils/api";
 
 /* ── Stripe singleton ── */
 let stripePromise = null;
@@ -294,7 +295,7 @@ const PaymentForm = ({ totalAmount, listingId, user, navigate, clientSecret }) =
 
         if (paymentIntent?.status === "succeeded") {
             try {
-                await axios.post("http://localhost:5000/api/payment/confirm-order", {
+                await axios.post(`${API_URL}/api/payment/confirm-order`, {
                     paymentIntentId: paymentIntent.id,
                     listingId,
                     buyerEmail: user?.email,
@@ -464,10 +465,10 @@ const CheckoutPage = () => {
         let cancelled = false;
         (async () => {
             try {
-                const { data: cfg } = await axios.get("http://localhost:5000/api/payment/config");
+                const { data: cfg } = await axios.get(`${API_URL}/api/payment/config`);
                 if (cancelled) return;
                 setStripePk(cfg.publishableKey);
-                const { data } = await axios.post("http://localhost:5000/api/payment/create-intent", {
+                const { data } = await axios.post(`${API_URL}/api/payment/create-intent`, {
                     amount: totalAmount, listingId: item._id,
                 });
                 if (cancelled) return;
@@ -726,7 +727,7 @@ const CheckoutPage = () => {
                                                     setWalletError(null);
                                                     try {
                                                         await axios.post(
-                                                            "http://localhost:5000/api/payment/confirm-wallet-order",
+                                                            `${API_URL}/api/payment/confirm-wallet-order`,
                                                             {
                                                                 listingId: item._id,
                                                                 buyerEmail: user?.email,
