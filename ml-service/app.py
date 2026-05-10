@@ -3,7 +3,7 @@ from flask_cors import CORS
 import joblib
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Feature names for sklearn model (to avoid warnings)
 SOLAR_FEATURES = ['temperature', 'humidity', 'cloud_cover', 'hour']
@@ -147,8 +147,8 @@ def predict_energy_forecast():
         return jsonify({'error': 'Missing forecast array'}), 400
     
     try:
-        sunrise_hour = datetime.utcfromtimestamp(sunrise + timezone_offset).hour
-        sunset_hour = datetime.utcfromtimestamp(sunset + timezone_offset).hour
+        sunrise_hour = datetime.fromtimestamp(sunrise + timezone_offset, tz=timezone.utc).hour
+        sunset_hour = datetime.fromtimestamp(sunset + timezone_offset, tz=timezone.utc).hour
         
         total_generated = 0
         
@@ -160,7 +160,7 @@ def predict_energy_forecast():
             
             if forecast_time is None: continue
             
-            forecast_hour = datetime.utcfromtimestamp(forecast_time + timezone_offset).hour
+            forecast_hour = datetime.fromtimestamp(forecast_time + timezone_offset, tz=timezone.utc).hour
             is_daylight = sunrise_hour <= forecast_hour < sunset_hour
             
             if not is_daylight:
